@@ -48,6 +48,7 @@ export async function rebuildMenu(): Promise<void> {
 
   const windowManager = cachedWindowManager
   const isMac = process.platform === 'darwin'
+  const homepageUrl = BRAND.homepageUrl
 
   // On Windows/Linux, hide the native menu entirely
   // Users access menu via the Craft logo dropdown in the app
@@ -191,10 +192,10 @@ export async function rebuildMenu(): Promise<void> {
     {
       label: i18n.t("menu.help"),
       submenu: [
-        {
-          label: i18n.t("menu.helpAndDocs"),
-          click: () => shell.openExternal('https://agents.craft.do/docs')
-        },
+        ...(homepageUrl ? [{
+          label: 'Homepage',
+          click: () => shell.openExternal(homepageUrl)
+        }] : []),
         {
           label: i18n.t("menu.keyboardShortcuts"),
           accelerator: 'CmdOrCtrl+/',

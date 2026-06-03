@@ -29,6 +29,8 @@ export interface BrandConfig {
   selfReferName: string;
   /** Session viewer base URL */
   viewerUrl: string;
+  /** Optional brand homepage shown in app menus */
+  homepageUrl?: string;
   /** Multi-line credits text shown in the About panel */
   credits: string;
   /** One-line credits summary */
@@ -68,6 +70,7 @@ const BRANDS: Record<string, BrandConfig> = {
     coAuthorLine: 'Co-Authored-By: ModelStudio Desktop <noreply@alibaba.com>',
     selfReferName: 'ModelStudio Desktop',
     viewerUrl: 'https://agents.craft.do',
+    homepageUrl: 'https://github.com/modelstudioai',
     credits: 'Architecture: craft-agents-oss | Agent: Qwen Code',
     creditsShort: 'Based on craft-agents-oss & Qwen Code',
     creditsEntries: [

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/styled-dropdown"
 import * as Icons from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@craft-agent/ui"
+import { BRAND } from '@craft-agent/shared/branding'
 import { CraftAgentsSymbol } from "./icons/CraftAgentsSymbol"
 import { SquarePenRounded } from "./icons/SquarePenRounded"
 import { TopBarButton } from "./ui/TopBarButton"
@@ -28,6 +29,8 @@ import {
 import type { MenuItem, MenuSection, SettingsMenuItem } from "../../shared/menu-schema"
 import { SETTINGS_ICONS } from "./icons/SettingsIcons"
 import { getDocUrl } from '@craft-agent/shared/docs/doc-links'
+
+const brandHomepageUrl = BRAND.homepageUrl
 
 // Map of action handlers for menu items that need custom behavior
 type MenuActionHandlers = {
@@ -271,11 +274,13 @@ export function AppMenu({
               Help
             </StyledDropdownMenuSubTrigger>
             <StyledDropdownMenuSubContent>
-              <StyledDropdownMenuItem onClick={() => window.electronAPI.openUrl('https://agents.craft.do/docs')}>
-                <Icons.HelpCircle className="h-3.5 w-3.5" />
-                Help & Documentation
-                <Icons.ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
-              </StyledDropdownMenuItem>
+              {brandHomepageUrl && (
+                <StyledDropdownMenuItem onClick={() => window.electronAPI.openUrl(brandHomepageUrl)}>
+                  <Icons.Home className="h-3.5 w-3.5" />
+                  Homepage
+                  <Icons.ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
+                </StyledDropdownMenuItem>
+              )}
               <StyledDropdownMenuItem onClick={() => window.electronAPI.openUrl(getDocUrl('automations'))}>
                 <Icons.Webhook className="h-3.5 w-3.5" />
                 Automations
