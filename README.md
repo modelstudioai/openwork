@@ -1,107 +1,81 @@
 # OpenWork
 
-OpenWork is a desktop and headless agent workspace from Model Studio AI. It provides multi-session chat, source connections, skills, file previews, automations, and permission modes in a local-first application.
+**A local-first desktop application for AI agent workflows from ModelStudio.**
 
-## Runtime
+OpenWork lets you work with AI agents on your desktop: chat with agents, manage multiple sessions, connect local projects and external tools, preview files and execution results, and move real development tasks forward in a permission-controlled environment.
 
-OpenWork runs agent sessions through an ACP-compatible local CLI runtime. The desktop app can use a bundled runtime for packaged builds or a local source checkout during development.
+Built for AI agents, OpenWork brings model capabilities, tool use, local engineering context, and multi-step task workflows into one desktop workspace.
 
-For normal desktop development, install dependencies and run the app from source. Runtime override details are intentionally kept in package scripts and build tooling so this README stays focused on OpenWork.
+## Features
 
-## Installation
+OpenWork gives your AI agent a ready-to-use desktop environment and lets it combine the following capabilities during complex tasks:
 
-```bash
-bun install
-bun run dev
-```
+- **Multi-session management** - Create separate sessions for different projects, tasks, or experiments, preserve context, and switch between them at any time.
+- **Local project workspaces** - Work against local codebases, filesystems, and development environments for real engineering tasks.
+- **Agent conversation interface** - View conversations, task progress, tool calls, and execution results inside the desktop app.
+- **Code execution and debugging** - Let agents read projects, run commands, analyze logs, modify code, and verify results.
+- **File and artifact previews** - Inspect code, documents, spreadsheets, command output, and generated content in the app.
+- **External data source connections** - Connect MCP servers, local filesystems, GitHub, and other tools or services.
+- **Skills extension** - Capture domain knowledge, tool usage patterns, and team workflows as reusable skills.
+- **Automated workflows** - Combine model capabilities, tool calls, and data sources to complete cross-system, multi-step tasks.
+- **Permission mode controls** - Confirm and manage file reads and writes, command execution, and external calls.
+- **Cross-platform distribution** - Use OpenWork as a desktop app for macOS, Windows, and Linux.
 
-## Common Commands
+## Example: Complete a Local Engineering Task in One Prompt
 
-```bash
-bun run typecheck:all
-bun run test:shared
-bun run dev
-bun run server:start
-```
+A typical desktop agent workflow can start with a single natural-language request:
 
-## Building for Distribution
+> "Help me figure out why this project's tests are failing, fix the issue, and summarize the changes."
 
-### Prerequisites
+OpenWork turns that request into a set of executable steps:
 
-- [Bun](https://bun.sh) (see `.bun-version` for exact version)
-- `bun install` to install all workspace dependencies
+1. Read the current project structure, configuration files, and test scripts.
+2. Run local commands to reproduce the failure.
+3. Analyze error logs and locate the relevant code.
+4. Modify files after user authorization.
+5. Rerun tests or build commands to verify the fix.
+6. Summarize the changes, verification results, and recommended next steps.
 
-### Developer Build
+You do not need to jump back and forth between the terminal, editor, browser, and documents. You start the task in the desktop app, and the agent performs analysis, execution, and feedback inside the local workspace.
 
-Use this for local testing. It produces an ad-hoc signed app.
+## How It Works
 
-```bash
-# macOS (arm64 + x64)
-bun run electron:dist:dev:mac
+OpenWork runs as a desktop application paired with an agent runtime.
 
-# Windows
-bun run electron:dist:dev:win
+The desktop app handles session management, workspace management, file previews, permission confirmation, external data source configuration, and user interaction. The agent runtime handles model interaction, tool use, command execution, and task progress.
 
-# Linux
-bun run electron:dist:dev:linux
-```
+This approach keeps the engineering power of command-line agents while providing a graphical experience better suited for long-running tasks. Developers can continue using local projects and existing toolchains while gaining clearer context management, process visibility, and permission control through the desktop app.
 
-### Release Build
+## Use Cases
 
-```bash
-bun run electron:dist:mac
-bun run electron:dist:win
-bun run electron:dist:linux
-```
+- Understand the structure and key modules of a codebase.
+- Diagnose test, build, or runtime failures.
+- Modify code and automatically run verification commands.
+- Work with local files, documents, spreadsheets, and execution results.
+- Connect GitHub, MCP services, or internal APIs to agent workflows.
+- Package recurring team processes as skills or automations.
+- Use agent automation in environments that require permission confirmation.
 
-Release builds require signing credentials via environment variables:
+## Relationship to ModelStudio CLI
 
-| Variable                      | Purpose                     |
-| ----------------------------- | --------------------------- |
-| `CSC_LINK`                    | Path to signing certificate |
-| `APPLE_ID`                    | Apple ID for notarization   |
-| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password       |
-| `APPLE_TEAM_ID`               | Team ID for notarization    |
+ModelStudio CLI is designed for terminal workflows and structured tool invocation. It lets AI agents directly call model, search, multimodal, application, and knowledge-base capabilities.
 
-### Build Output
+OpenWork provides a graphical workspace for sessions, project context, file previews, permission control, and long-running task management.
 
-Artifacts are written to `apps/electron/release/`.
+The CLI is better suited as a command-line tool and automation entry point. OpenWork is better suited as the daily interactive surface for using, observing, and managing agent workflows. Together, they serve the same goal: bringing ModelStudio models and tools into real development and business processes.
 
-## CLI
+## Related Links
 
-```bash
-bun run apps/cli/src/index.ts run "Hello from OpenWork"
-bun run apps/cli/src/index.ts run --workspace-dir ./project "Summarize this repo"
-```
+| Resource | Link |
+| :--- | :--- |
+| ModelStudio CLI | https://github.com/modelstudioai/cli |
+| Alibaba Cloud ModelStudio Console | https://bailian.console.aliyun.com/ |
+| ModelStudio API Documentation | https://help.aliyun.com/zh/model-studio/ |
+| Qwen Model List | https://help.aliyun.com/zh/model-studio/getting-started/models |
 
-The `run` command spawns a headless server, creates a temporary session, streams the response, and exits.
+## Project Positioning
 
-## Repository Layout
-
-```text
-apps/
-  electron/     Desktop app
-  cli/          Terminal client
-  webui/        Web adapter
-packages/
-  shared/       Agent, config, prompts, sessions, sources
-  server-core/  RPC handlers and session manager
-  core/         Shared types
-  ui/           Shared UI components
-  session-tools-core/
-  session-mcp-server/
-scripts/        Build and packaging helpers
-```
-
-## Capabilities
-
-- Multi-session inbox with streaming responses and tool visualization
-- Model discovery through ACP
-- MCP, REST API, and local filesystem sources
-- Skills stored per workspace
-- Permission modes for planning, asking before edits, and autonomous execution
-- File attachments and in-app previews for images, PDFs, Office files, and diffs
-- Event-driven automations and messaging integrations
+OpenWork is the desktop entry point for the ModelStudio AI agent ecosystem. It organizes capabilities that are often scattered across terminals, editors, tool platforms, and local files into one workspace, so agents can do more than answer questions: they can connect context, call tools, execute tasks, and produce results.
 
 ## Acknowledgments
 
