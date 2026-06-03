@@ -103,6 +103,14 @@ scripts/        Build and packaging helpers
 - File attachments and in-app previews for images, PDFs, Office files, and diffs
 - Event-driven automations and messaging integrations
 
+## Acknowledgments
+
+ModelStudio OpenWork is adapted and extended from the desktop architecture of [Craft Agents OSS](https://github.com/craft-ai-agents/craft-agents-oss), which provides important foundations for the desktop app, session workspace, agent interaction model, and local-first experience.
+
+OpenWork's technical foundation is [Qwen Code](https://github.com/QwenLM/qwen-code), whose agent runtime capabilities support code understanding, tool use, command execution, and engineering task workflows.
+
+We are grateful to these open source projects for the foundations they provide to ModelStudio OpenWork.
+
 ## License
 
 Apache 2.0. Third-party dependencies are listed in package manifests and are subject to their respective licenses.
