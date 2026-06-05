@@ -63,6 +63,7 @@ export const RPC_CHANNELS = {
   workspaces: {
     GET: 'workspaces:get',
     CREATE: 'workspaces:create',
+    CREATE_PERMANENT_WORKTREE: 'workspaces:createPermanentWorktree',
     CHECK_SLUG: 'workspaces:checkSlug',
     UPDATE_REMOTE: 'workspaces:updateRemote',
   },
@@ -82,6 +83,9 @@ export const RPC_CHANNELS = {
     END_DRAG: 'window:endDrag',
     FOCUS_STATE: 'window:focusState',
     GET_FOCUS_STATE: 'window:getFocusState',
+    PET_SET_ENABLED: 'window:petSetEnabled',
+    PET_SET_IGNORE_MOUSE: 'window:petSetIgnoreMouse',
+    PET_FOCUS_SESSION: 'window:petFocusSession',
   },
   file: {
     READ: 'file:read',
@@ -305,6 +309,15 @@ export const RPC_CHANNELS = {
   appearance: {
     GET_RICH_TOOL_DESCRIPTIONS: 'appearance:getRichToolDescriptions',
     SET_RICH_TOOL_DESCRIPTIONS: 'appearance:setRichToolDescriptions',
+    GET_SELECTED_PET_ID: 'appearance:getSelectedPetId',
+    SET_SELECTED_PET_ID: 'appearance:setSelectedPetId',
+    GET_PET_ENABLED: 'appearance:getPetEnabled',
+    SET_PET_ENABLED: 'appearance:setPetEnabled',
+    PET_ENABLED_CHANGED: 'appearance:petEnabledChanged',
+    GET_PET_SIZE: 'appearance:getPetSize',
+    SET_PET_SIZE: 'appearance:setPetSize',
+    LOAD_CUSTOM_PETS: 'appearance:loadCustomPets',
+    OPEN_PETS_FOLDER: 'appearance:openPetsFolder',
   },
   tools: {
     GET_BROWSER_TOOL_ENABLED: 'tools:getBrowserToolEnabled',

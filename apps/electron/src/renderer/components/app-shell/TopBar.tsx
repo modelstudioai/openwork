@@ -10,7 +10,6 @@
 import { useTranslation } from 'react-i18next';
 import * as Icons from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@craft-agent/ui';
-import { BRAND } from '@craft-agent/shared/branding';
 import { CraftAgentsSymbol } from '../icons/CraftAgentsSymbol';
 import { PanelLeftRounded } from '../icons/PanelLeftRounded';
 import { TopBarButton } from '../ui/TopBarButton';
@@ -45,10 +44,9 @@ import { SquarePenRounded } from '../icons/SquarePenRounded';
 import { useEffect, useState } from 'react';
 import type { Workspace } from '../../../shared/types';
 import type { ViewRoute } from '../../../shared/routes';
+import { BRAND } from '@craft-agent/shared/branding';
 
 // --- Menu rendering (moved from AppMenu) ---
-
-const brandHomepageUrl = BRAND.homepageUrl;
 
 type MenuActionHandlers = {
   toggleFocusMode?: () => void;
@@ -203,6 +201,7 @@ export function TopBar({
 }: TopBarProps) {
   const { t } = useTranslation();
   const [isDebugMode, setIsDebugMode] = useState(false);
+  const hasHelpMenuLinks = BRAND.helpMenuLinks.length > 0;
 
   const newChatHotkey = useActionLabel('app.newChat').hotkey;
   const newWindowHotkey = useActionLabel('app.newWindow').hotkey;
@@ -327,17 +326,20 @@ export function TopBar({
                     {t('menu.help')}
                   </StyledDropdownMenuSubTrigger>
                   <StyledDropdownMenuSubContent>
-                    {brandHomepageUrl && (
-                      <StyledDropdownMenuItem
-                        onClick={() =>
-                          window.electronAPI.openUrl(brandHomepageUrl)
-                        }
-                      >
-                        <Icons.Home className="h-3.5 w-3.5" />
-                        Homepage
-                        <Icons.ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
-                      </StyledDropdownMenuItem>
-                    )}
+                    {BRAND.helpMenuLinks.map((link) => {
+                      const Icon = getIcon(link.icon) ?? Icons.ExternalLink;
+                      return (
+                        <StyledDropdownMenuItem
+                          key={link.url}
+                          onClick={() => window.electronAPI.openUrl(link.url)}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          {t(link.labelKey)}
+                          <Icons.ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
+                        </StyledDropdownMenuItem>
+                      );
+                    })}
+                    {hasHelpMenuLinks && <StyledDropdownMenuSeparator />}
                     <StyledDropdownMenuItem onClick={onOpenKeyboardShortcuts}>
                       <Icons.Keyboard className="h-3.5 w-3.5" />
                       {t('menu.keyboardShortcuts')}

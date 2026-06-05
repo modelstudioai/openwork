@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "openwork",
+      "name": "craft-agent",
       "dependencies": {
         "@agentclientprotocol/sdk": "^0.21.0",
         "@dnd-kit/dom": "^0.4.0-beta-20260227032529",

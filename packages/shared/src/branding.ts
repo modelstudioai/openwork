@@ -1,7 +1,7 @@
 /**
  * Centralized branding configuration.
  *
- * Supports multiple brand presets (e.g. "qwen-code", "modelstudio").
+ * Supports multiple brand presets (e.g. "qwen-code", "openwork").
  * Select at runtime via the CRAFT_BRAND environment variable.
  * Default: "qwen-code" (backward-compatible).
  */
@@ -29,8 +29,27 @@ export interface BrandConfig {
   selfReferName: string;
   /** Session viewer base URL */
   viewerUrl: string;
-  /** Optional brand homepage shown in app menus */
-  homepageUrl?: string;
+  /** Brand-owned external links shown in the Help menu */
+  helpMenuLinks: Array<{ labelKey: string; url: string; icon: string }>;
+  /** Brand-specific Electron resource paths, relative to apps/electron/ */
+  assets: {
+    /** Folder containing app icons and other brand-owned assets */
+    resourceDir: string;
+    /** Renderer logo/symbol asset */
+    rendererSymbol: string;
+    /** macOS app and DMG icon */
+    macIcon: string;
+    /** Windows installer/app icon */
+    winIcon: string;
+    /** Linux AppImage icon */
+    linuxIcon: string;
+    /** Optional macOS development Dock icon PNG */
+    devDockIcon?: string;
+    /** Optional SVG source icon for regeneration workflows */
+    iconSvg?: string;
+    /** Optional macOS 26+ Liquid Glass compiled icon asset */
+    liquidGlassAssetsCar?: string;
+  };
   /** Multi-line credits text shown in the About panel */
   credits: string;
   /** One-line credits summary */
@@ -53,6 +72,23 @@ const QWEN_CODE_BRAND: BrandConfig = {
   coAuthorLine: 'Co-Authored-By: Qwen Code <agents-noreply@craft.do>',
   selfReferName: 'Qwen Code',
   viewerUrl: 'https://agents.craft.do',
+  helpMenuLinks: [
+    {
+      labelKey: 'menu.homepage',
+      url: 'https://qwen.ai/qwencode',
+      icon: 'House',
+    },
+  ],
+  assets: {
+    resourceDir: 'resources/brands/qwen-code',
+    rendererSymbol: 'resources/brands/qwen-code/icon.svg',
+    macIcon: 'resources/brands/qwen-code/icon.icns',
+    winIcon: 'resources/brands/qwen-code/icon.ico',
+    linuxIcon: 'resources/brands/qwen-code/icon.png',
+    devDockIcon: 'resources/brands/qwen-code/dock.png',
+    iconSvg: 'resources/brands/qwen-code/icon.svg',
+    liquidGlassAssetsCar: 'resources/brands/qwen-code/Assets.car',
+  },
   credits: '',
   creditsShort: '',
   creditsEntries: [],
@@ -60,17 +96,32 @@ const QWEN_CODE_BRAND: BrandConfig = {
 
 const BRANDS: Record<string, BrandConfig> = {
   'qwen-code': QWEN_CODE_BRAND,
-  modelstudio: {
-    id: 'modelstudio',
-    appName: 'ModelStudio Desktop',
-    appId: 'com.alibaba.modelstudio-desktop',
-    productName: 'ModelStudio Desktop',
-    artifactPrefix: 'ModelStudio-Desktop',
+  openwork: {
+    id: 'openwork',
+    appName: 'OpenWork',
+    appId: 'com.alibaba.openwork',
+    productName: 'OpenWork',
+    artifactPrefix: 'OpenWork',
     copyright: 'Copyright © 2026 Alibaba Group.',
-    coAuthorLine: 'Co-Authored-By: ModelStudio Desktop <noreply@alibaba.com>',
-    selfReferName: 'ModelStudio Desktop',
+    coAuthorLine: 'Co-Authored-By: OpenWork <noreply@alibaba.com>',
+    selfReferName: 'OpenWork',
     viewerUrl: 'https://agents.craft.do',
-    homepageUrl: 'https://github.com/modelstudioai',
+    helpMenuLinks: [
+      {
+        labelKey: 'menu.homepage',
+        url: 'https://github.com/modelstudioai/openwork',
+        icon: 'House',
+      },
+    ],
+    assets: {
+      resourceDir: 'resources/brands/openwork',
+      rendererSymbol: 'resources/brands/openwork/symbol.png',
+      macIcon: 'resources/brands/openwork/icon.icns',
+      winIcon: 'resources/brands/openwork/icon.png',
+      linuxIcon: 'resources/brands/openwork/icon.png',
+      devDockIcon: 'resources/brands/openwork/dock.png',
+      liquidGlassAssetsCar: 'resources/brands/openwork/Assets.car',
+    },
     credits: 'Architecture: craft-agents-oss | Agent: Qwen Code',
     creditsShort: 'Based on craft-agents-oss & Qwen Code',
     creditsEntries: [

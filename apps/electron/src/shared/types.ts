@@ -54,6 +54,7 @@ export type {
 // Auth types for onboarding
 import type { AuthState, SetupNeeds } from '@craft-agent/shared/auth/types';
 import type { AuthType } from '@craft-agent/shared/config/types';
+import type { CustomPetEntry } from '@craft-agent/shared/config/pets';
 export type { AuthState, SetupNeeds, AuthType };
 
 // Credential health types
@@ -423,6 +424,10 @@ export interface ElectronAPI {
     folderPath: string,
     name: string,
     remoteServer?: { url: string; token: string; remoteWorkspaceId: string },
+  ): Promise<Workspace>;
+  createPermanentWorktree(
+    workspaceId: string,
+    branchName: string,
   ): Promise<Workspace>;
   checkWorkspaceSlug(slug: string): Promise<{ exists: boolean; path: string }>;
   updateWorkspaceRemoteServer(
@@ -841,6 +846,18 @@ export interface ElectronAPI {
   // Appearance settings
   getRichToolDescriptions(): Promise<boolean>;
   setRichToolDescriptions(enabled: boolean): Promise<void>;
+  getSelectedPetId(): Promise<string>;
+  setSelectedPetId(id: string): Promise<void>;
+  getPetEnabled(): Promise<boolean>;
+  setPetEnabled(enabled: boolean): Promise<void>;
+  onPetEnabledChanged(callback: (enabled: boolean) => void): () => void;
+  getPetSize(): Promise<number>;
+  setPetSize(size: number): Promise<void>;
+  loadCustomPets(): Promise<CustomPetEntry[]>;
+  openPetsFolder(): Promise<string>;
+  setPetWindowEnabled(enabled: boolean): Promise<void>;
+  petWindowSetIgnoreMouse(ignore: boolean): Promise<void>;
+  petFocusSession(sessionId: string): Promise<void>;
 
   // Prompt caching & context
   getExtendedPromptCache(): Promise<boolean>;

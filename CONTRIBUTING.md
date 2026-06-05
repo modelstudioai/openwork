@@ -1,21 +1,22 @@
-# Contributing to OpenWork
+# Contributing to Qwen Code
 
-Thank you for your interest in contributing to OpenWork. This guide covers the
-local development workflow for the desktop app and shared packages.
+Thank you for your interest in contributing to Qwen Code! This document provides guidelines and instructions for contributing.
 
-## Prerequisites
+## Getting Started
 
-- [Bun](https://bun.sh/) 1.3 or newer
-- Node.js 22 or newer for the Qwen Code runtime and related tooling
+### Prerequisites
+
+- [Bun](https://bun.sh/) runtime
+- Node.js 18+ (for some tooling)
 - macOS, Linux, or Windows
 
-## Development Setup
+### Development Setup
 
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/modelstudioai/openwork.git
-   cd openwork
+   git clone https://github.com/QwenLM/qwen-code.git
+   cd qwen-code
    ```
 
 2. Install dependencies:
@@ -24,80 +25,104 @@ local development workflow for the desktop app and shared packages.
    bun install
    ```
 
-3. Start the Electron app in development mode:
+3. Set up environment variables:
 
    ```bash
-   CRAFT_BRAND=modelstudio bun run electron:dev
+   cp .env.example .env
+   # Edit .env with your credentials
    ```
 
-   To run against a local Qwen Code checkout instead of a vendored or npm
-   runtime, pass the source root:
-
+4. Run in development mode:
    ```bash
-   CRAFT_BRAND=modelstudio \
-   QWEN_CODE_ROOT=/path/to/qwen-code \
    bun run electron:dev
    ```
 
-## Useful Commands
+## Development Workflow
 
-Run focused checks whenever possible:
+### Branch Naming
+
+Use descriptive branch names:
+
+- `feature/add-new-tool` - New features
+- `fix/resolve-auth-issue` - Bug fixes
+- `refactor/simplify-agent-loop` - Code refactoring
+- `docs/update-readme` - Documentation updates
+
+### Making Changes
+
+1. Create a feature branch from `main`
+2. Make your changes
+3. Run type checking: `bun run typecheck:all`
+4. Commit your changes with clear, descriptive messages
+5. Push to your fork and create a pull request
+
+### Code Style
+
+- We use TypeScript throughout the codebase
+- Follow existing patterns in the codebase
+- Use meaningful variable and function names
+- Add comments for complex logic
+
+### Type Checking
+
+Before submitting a PR, ensure all type checks pass:
 
 ```bash
-bun run typecheck:shared
-bun run typecheck:electron
 bun run typecheck:all
 ```
 
-Build the desktop app resources:
+## Pull Request Process
 
-```bash
-bun run electron:build
-```
+1. **Title**: Use a clear, descriptive title
+2. **Description**: Explain what the PR does and why
+3. **Testing**: Describe how you tested the changes
+4. **Screenshots**: Include screenshots for UI changes
 
-Package a dev build:
+### PR Template
 
-```bash
-CRAFT_DEV_RUNTIME=1 bun run electron:dist:dev:mac
+```markdown
+## Summary
+
+Brief description of changes
+
+## Changes
+
+- Change 1
+- Change 2
+
+## Testing
+
+How you tested these changes
+
+## Screenshots (if applicable)
 ```
 
 ## Project Structure
 
-```text
-openwork/
+```
+qwen-code/
 ├── apps/
-│   ├── electron/    # Electron desktop app
-│   ├── cli/         # Command-line entry points
-│   ├── viewer/      # Shared session viewer
-│   └── webui/       # Web UI build
-├── packages/
-│   ├── shared/      # Shared app logic and protocol types
-│   ├── server-core/ # Server/session orchestration
-│   ├── server/      # Server entry point
-│   ├── ui/          # React UI components
-│   └── core/        # Shared lower-level utilities
-└── scripts/         # Build, dev, and packaging scripts
+│   ├── electron/    # Desktop GUI (primary interface)
+│   └── tui/         # Terminal CLI (deprecated)
+└── packages/
+    ├── core/        # @craft-agent/core - Shared types
+    ├── shared/      # @craft-agent/shared - Business logic
+    └── ui/          # @craft-agent/ui - React components
 ```
 
-## Contribution Guidelines
+## Key Areas
 
-- Keep changes focused and minimal.
-- Follow existing TypeScript and React patterns.
-- Prefer existing shared helpers over introducing new abstractions.
-- Include screenshots or a short screen recording for visible UI changes.
-- Mention the commands you ran in the PR description.
-- Do not include generated build artifacts unless the project explicitly tracks
-  them.
+- **Agent Logic**: `packages/shared/src/agent/`
+- **Authentication**: `packages/shared/src/auth/`
+- **MCP Integration**: `packages/shared/src/mcp/`
+- **UI Components**: `packages/ui/src/`
+- **Electron App**: `apps/electron/`
 
-## Pull Requests
+## Questions?
 
-1. Create a branch from the target branch.
-2. Make the smallest change that solves the problem.
-3. Run the relevant focused checks.
-4. Open a pull request with a clear summary, testing notes, and screenshots for
-   UI changes.
+- Open an issue for bugs or feature requests
+- Start a discussion for questions or ideas
 
 ## License
 
-By contributing, you agree that your contributions are licensed under the same
-license as this repository.
+By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
