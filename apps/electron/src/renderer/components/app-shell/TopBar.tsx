@@ -48,8 +48,6 @@ import type { ViewRoute } from '../../../shared/routes';
 
 // --- Menu rendering (moved from AppMenu) ---
 
-const brandHomepageUrl = BRAND.homepageUrl;
-
 type MenuActionHandlers = {
   toggleFocusMode?: () => void;
   toggleSidebar?: () => void;
@@ -203,6 +201,7 @@ export function TopBar({
 }: TopBarProps) {
   const { t } = useTranslation();
   const [isDebugMode, setIsDebugMode] = useState(false);
+  const hasHelpMenuLinks = BRAND.helpMenuLinks.length > 0;
 
   const newChatHotkey = useActionLabel('app.newChat').hotkey;
   const newWindowHotkey = useActionLabel('app.newWindow').hotkey;
@@ -327,17 +326,20 @@ export function TopBar({
                     {t('menu.help')}
                   </StyledDropdownMenuSubTrigger>
                   <StyledDropdownMenuSubContent>
-                    {brandHomepageUrl && (
-                      <StyledDropdownMenuItem
-                        onClick={() =>
-                          window.electronAPI.openUrl(brandHomepageUrl)
-                        }
-                      >
-                        <Icons.Home className="h-3.5 w-3.5" />
-                        Homepage
-                        <Icons.ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
-                      </StyledDropdownMenuItem>
-                    )}
+                    {BRAND.helpMenuLinks.map((link) => {
+                      const Icon = getIcon(link.icon) ?? Icons.ExternalLink;
+                      return (
+                        <StyledDropdownMenuItem
+                          key={link.url}
+                          onClick={() => window.electronAPI.openUrl(link.url)}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          {t(link.labelKey)}
+                          <Icons.ExternalLink className="h-3 w-3 ml-auto text-muted-foreground" />
+                        </StyledDropdownMenuItem>
+                      );
+                    })}
+                    {hasHelpMenuLinks && <StyledDropdownMenuSeparator />}
                     <StyledDropdownMenuItem onClick={onOpenKeyboardShortcuts}>
                       <Icons.Keyboard className="h-3.5 w-3.5" />
                       {t('menu.keyboardShortcuts')}
