@@ -9,7 +9,6 @@
 
 import { Notification, app, BrowserWindow, nativeImage } from 'electron'
 import { join } from 'path'
-import { readFileSync } from 'fs'
 import { mainLog } from './logger'
 import { RPC_CHANNELS } from '../shared/types'
 import type { WindowManager } from './window-manager'
@@ -83,7 +82,10 @@ export function showNotification(
 /**
  * Handle notification click - focus window and navigate to session
  */
-function handleNotificationClick(workspaceId: string, sessionId: string): void {
+export function handleNotificationClick(
+  workspaceId: string,
+  sessionId: string,
+): void {
   if (!windowManager) {
     mainLog.error('WindowManager not initialized for notification click')
     return
@@ -131,8 +133,14 @@ function handleNotificationClick(workspaceId: string, sessionId: string): void {
 export function initBadgeIcon(iconPath: string): void {
   try {
     baseIconPath = iconPath
-    // Read and cache the icon as base64 data URL
-    const iconBuffer = readFileSync(iconPath)
+    const icon = nativeImage.createFromPath(iconPath)
+    if (icon.isEmpty()) {
+      baseIconDataUrl = null
+      mainLog.warn('Badge icon could not be loaded:', iconPath)
+      return
+    }
+
+    const iconBuffer = icon.toPNG()
     baseIconDataUrl = `data:image/png;base64,${iconBuffer.toString('base64')}`
     mainLog.info('Badge icon initialized:', iconPath)
   } catch (error) {
