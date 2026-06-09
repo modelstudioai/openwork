@@ -69,7 +69,9 @@ The CLI is better suited as a command-line tool and automation entry point. Open
 | Resource | Link |
 | :--- | :--- |
 | ModelStudio CLI | https://github.com/modelstudioai/cli |
-| Alibaba Cloud ModelStudio Console | https://bailian.console.aliyun.com/ |
+| ModelStudio CLI Site | https://bailian.console.aliyun.com/cli?source_channel=cli_github& |
+| Get API Key | https://bailian.console.aliyun.com/cn-beijing/?source_channel=key_github&tab=app#/api-key |
+| Alibaba Cloud ModelStudio Console | https://bailian.console.aliyun.com/?source_channel=cli_github |
 | ModelStudio API Documentation | https://help.aliyun.com/zh/model-studio/ |
 | Qwen Model List | https://help.aliyun.com/zh/model-studio/getting-started/models |
 
