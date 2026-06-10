@@ -87,6 +87,12 @@ OpenWork's technical foundation is [Qwen Code](https://github.com/QwenLM/qwen-co
 
 We are grateful to these open source projects for the foundations they provide to ModelStudio OpenWork.
 
+## 📖 Full Tutorial
+
+Step-by-step setup, hands-on walkthroughs, and end-to-end examples are on our docs site:
+
+**[modelstudioai.github.io/guide/](https://modelstudioai.github.io/guide/)**
+
 ## License
 
 Apache 2.0. Third-party dependencies are listed in package manifests and are subject to their respective licenses.
