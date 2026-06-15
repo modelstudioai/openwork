@@ -30,16 +30,16 @@ Use web search if needed to gather visual reference. For well-known characters
 
 Define 8-12 colors for the character:
 
-| Color Role | Example (F1 Driver) | Example (Anime Character) |
-|---|---|---|
-| Primary outfit | Team color (papaya) | Uniform color (navy) |
-| Outfit dark | Darker shade | Darker shade |
-| Outfit light | Lighter shade | Lighter shade |
-| Skin | Warm skin tone | Skin tone |
-| Skin dark | Shadow skin | Shadow skin |
-| Hair | Character hair color | Character hair color |
-| Accent | Number/logo color | Eye color / accessory |
-| Shoe | Dark grey/black | Character shoe color |
+| Color Role     | Example (F1 Driver)  | Example (Anime Character) |
+| -------------- | -------------------- | ------------------------- |
+| Primary outfit | Team color (papaya)  | Uniform color (navy)      |
+| Outfit dark    | Darker shade         | Darker shade              |
+| Outfit light   | Lighter shade        | Lighter shade             |
+| Skin           | Warm skin tone       | Skin tone                 |
+| Skin dark      | Shadow skin          | Shadow skin               |
+| Hair           | Character hair color | Character hair color      |
+| Accent         | Number/logo color    | Eye color / accessory     |
+| Shoe           | Dark grey/black      | Character shoe color      |
 
 **Important:** All colors must be distinct and work at small pixel scale (3x = 9px details).
 
@@ -50,6 +50,7 @@ The script generates a **1536×1872 pixel RGBA spritesheet** (8 columns × 9 row
 192×208 px cells) — the exact format OpenWork expects.
 
 **Run it like this:**
+
 ```bash
 python3 <skill_dir>/scripts/gen_spritesheet.py \
   --output ~/.qwen/pets/<character_id>/spritesheet.webp \
@@ -61,17 +62,17 @@ not covered by the parameterized version.
 
 **The 9 animation rows are:**
 
-| Row | State | Description |
-|---|---|---|
-| 0 | idle | Breathing + blinking (8 frames) |
-| 1 | running-right | Running to the right (8 frames) |
-| 2 | running-left | Running to the left (8 frames) |
-| 3 | waving | Waving at user (8 frames) |
-| 4 | jumping | Jumping celebration (8 frames) |
-| 5 | failed | Sad/collapsed on error (8 frames) |
-| 6 | waiting | Idle tapping (8 frames) |
-| 7 | running | Generic running (8 frames) |
-| 8 | review | Thinking/examining (8 frames) |
+| Row | State         | Description                       |
+| --- | ------------- | --------------------------------- |
+| 0   | idle          | Breathing + blinking (8 frames)   |
+| 1   | running-right | Running to the right (8 frames)   |
+| 2   | running-left  | Running to the left (8 frames)    |
+| 3   | waving        | Waving at user (8 frames)         |
+| 4   | jumping       | Jumping celebration (8 frames)    |
+| 5   | failed        | Sad/collapsed on error (8 frames) |
+| 6   | waiting       | Idle tapping (8 frames)           |
+| 7   | running       | Generic running (8 frames)        |
+| 8   | review        | Thinking/examining (8 frames)     |
 
 ### Step 4: Create pet.json
 
@@ -87,6 +88,7 @@ Write the manifest to `~/.qwen/pets/<character_id>/pet.json`:
 ```
 
 Rules:
+
 - `id`: lowercase, no spaces, URL-safe (e.g., `piastri`, `satoru`, `goku`)
 - `displayName`: The name shown in the UI (e.g., "Piastri", "五条悟", "悟空")
 - `description`: One short sentence describing the character
@@ -94,11 +96,13 @@ Rules:
 ### Step 5: Verify and Activate
 
 1. Confirm the files exist:
+
    ```bash
    ls -lh ~/.qwen/pets/<character_id>/
    ```
 
 2. Open the spritesheet in Preview for the user to check:
+
    ```bash
    open ~/.qwen/pets/<character_id>/spritesheet.webp
    ```
@@ -110,6 +114,7 @@ Rules:
 ## Character Design Guidelines
 
 ### Chibi Proportions
+
 - **Head**: ~40% of total height (big head = cute)
 - **Body**: ~30% of total height
 - **Legs**: ~25% of total height
@@ -117,6 +122,7 @@ Rules:
 - **Character center**: approximately (96, 124) within the 192×208 cell
 
 ### Drawing Order (back to front)
+
 1. Legs (behind body)
 2. Body / outfit
 3. Arms
@@ -128,6 +134,7 @@ Rules:
 9. Foreground details (number, logo, badge)
 
 ### Animation Tips
+
 - **Idle**: subtle Y bob (0 to -2px) + blink every 3rd-4th frame
 - **Running**: alternating leg offset (±4px), body tilt (±2px), arm swing
 - **Waving**: one arm raised high, alternating frames
@@ -137,7 +144,9 @@ Rules:
 - **Sad expression**: straight eyebrows, downturned mouth
 
 ### Headgear Variants
+
 The template supports several headgear types. Set via `features.headgear`:
+
 - `cap` — baseball cap with brim (default for F1 drivers)
 - `helmet` — full racing helmet with visor
 - `none` — no headgear (just hair)
@@ -150,7 +159,9 @@ The template supports several headgear types. Set via `features.headgear`:
 - `headband` — ninja/sports headband
 
 ### Special Features
+
 Set via `features.extras` (list):
+
 - `glasses` — round or rectangular glasses
 - `scarf` — neck scarf
 - `tail` — animal tail
@@ -162,6 +173,7 @@ Set via `features.extras` (list):
 ## Example Characters
 
 ### F1 Driver (e.g., Piastri, Norris, Verstappen)
+
 ```json
 {
   "colors": {
@@ -180,6 +192,7 @@ Set via `features.extras` (list):
 ```
 
 ### Anime Character (e.g., Gojo Satoru)
+
 ```json
 {
   "colors": {
@@ -197,6 +210,7 @@ Set via `features.extras` (list):
 ```
 
 ### Animal (e.g., Shiba Inu)
+
 ```json
 {
   "colors": {
