@@ -533,7 +533,7 @@ jobs:
 
           echo "url=$pr_url" >> "$GITHUB_OUTPUT"
 
-      - name: Enable auto-merge
+      - name: Merge or enable auto-merge
         env:
           GH_TOKEN: ${{ secrets.CI_BOT_PAT || github.token }}
           PR_URL: ${{ steps.version-pr.outputs.url }}
@@ -541,11 +541,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          gh pr merge "$PR_URL" \
-            --squash \
-            --auto \
-            --delete-branch \
+          merge_state_status="$(gh pr view "$PR_URL" \
+            --json mergeStateStatus \
+            --jq '.mergeStateStatus')"
+
+          merge_args=(
+            "$PR_URL"
+            --squash
+            --delete-branch
             --subject "chore(release): desktop ${RELEASE_TAG} [skip ci]"
+          )
+
+          if [ "$merge_state_status" = "CLEAN" ]; then
+            gh pr merge "${merge_args[@]}"
+          else
+            gh pr merge "${merge_args[@]}" --auto
+          fi
 
   dry-run-summary:
     name: Dry Run Summary
