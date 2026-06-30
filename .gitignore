@@ -59,6 +59,9 @@ pnpm-lock.yaml
 # Craft Agent local data (sessions, credentials, config)
 .craft-agent/
 
+# E2E harness scratch (isolated user-data, failure screenshots)
+.e2e/
+
 # SSH keys and secrets
 *.pem
 *.key

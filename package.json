@@ -41,6 +41,7 @@
     "dist:win:no-publish": "bun run electron:dist:win:no-publish",
     "dist:linux:no-publish": "bun run electron:dist:linux:no-publish",
     "test": "bun test && for f in $(find . -name '*.isolated.ts' -not -path './node_modules/*'); do bun test \"$f\" || exit 1; done",
+    "e2e": "bun run e2e/runner.ts",
     "typecheck": "bun run typecheck:shared",
     "typecheck:shared": "cd packages/shared && bun run tsc --noEmit",
     "typecheck:staged": "bash scripts/typecheck-staged.sh",
