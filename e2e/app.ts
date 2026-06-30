@@ -120,9 +120,16 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   //  - CRAFT_USER_DATA_DIR  → Electron userData (cache, cookies, local storage)
   //  - CRAFT_CONFIG_DIR     → app config + project-workspace registry (~/.craft-agent)
   //  - QWEN_DEFAULT_WORKSPACE_DIR → the default conversation workspace (else ~/Documents)
-  const userDataDir = join(E2E_DIR, 'user-data');
-  const configDir = join(E2E_DIR, 'config');
-  const workspaceDir = join(E2E_DIR, 'workspace');
+  //
+  // Keyed on the (unique-per-launch) debug port so each assertion gets its own
+  // profile. Electron's single-instance lock lives in userData; if a prior
+  // instance lingers a moment past teardown, a shared profile would make the
+  // next launch hand off to the old instance and exit — and no new renderer
+  // target would ever appear.
+  const profileKey = `p${port}`;
+  const userDataDir = join(E2E_DIR, 'user-data', profileKey);
+  const configDir = join(E2E_DIR, 'config', profileKey);
+  const workspaceDir = join(E2E_DIR, 'workspace', profileKey);
   mkdirSync(userDataDir, { recursive: true });
   mkdirSync(configDir, { recursive: true });
   mkdirSync(workspaceDir, { recursive: true });
@@ -138,9 +145,17 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   // Electron under a virtual framebuffer and disable the Chromium sandbox, which
   // cannot initialize as root inside a container.
   const headlessLinux = process.platform === 'linux' && !process.env.DISPLAY;
-  const cmd = headlessLinux
+  const baseCmd = headlessLinux
     ? ['xvfb-run', '-a', ELECTRON_BIN, ...electronArgs, '--no-sandbox']
     : [ELECTRON_BIN, ...electronArgs];
+  // Under headless Linux, launch in a fresh process group (via setsid) so
+  // teardown can signal the whole tree. `xvfb-run` forks Xvfb and Electron as
+  // separate children; a plain kill() of the wrapper orphans them, leaking the
+  // Electron instance (and its single-instance lock) into the next assertion.
+  // Other platforms launch Electron directly, so the wrapper problem — and the
+  // need for `setsid`, which isn't present on macOS — does not apply.
+  const useProcessGroup = headlessLinux;
+  const cmd = useProcessGroup ? ['setsid', ...baseCmd] : baseCmd;
 
   const proc: Subprocess = spawn({
     cmd,
@@ -158,25 +173,34 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   });
 
   let stopped = false;
-  const stop = async (): Promise<void> => {
-    if (stopped) return;
-    stopped = true;
+  // Signal the whole process group when we launched via setsid, so Xvfb and
+  // Electron die with the wrapper instead of being orphaned.
+  const signalTree = (signal: number): void => {
+    if (useProcessGroup && typeof proc.pid === 'number') {
+      try {
+        process.kill(-proc.pid, signal);
+        return;
+      } catch {
+        // group already gone — fall through to the single-process kill
+      }
+    }
     try {
-      proc.kill();
+      proc.kill(signal);
     } catch {
       // already gone
     }
+  };
+  const stop = async (): Promise<void> => {
+    if (stopped) return;
+    stopped = true;
+    signalTree(15);
     // Escalate if it doesn't exit promptly.
     const exited = await Promise.race([
       proc.exited.then(() => true),
       Bun.sleep(5000).then(() => false),
     ]);
     if (!exited) {
-      try {
-        proc.kill(9);
-      } catch {
-        // already gone
-      }
+      signalTree(9);
     }
   };
 
