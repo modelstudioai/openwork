@@ -11,6 +11,10 @@ interface ActionRegistryContextType {
   // Execute an action by ID
   execute: (actionId: ActionId) => void
 
+  // Whether an action has a registered handler that is currently enabled
+  // (i.e. calling execute() right now would actually run something).
+  canExecute: (actionId: ActionId) => boolean
+
   // Get the current hotkey for an action (respects user overrides)
   getHotkey: (actionId: ActionId) => string | null
 
@@ -53,6 +57,12 @@ export function ActionRegistryProvider({ children }: { children: React.ReactNode
         break // Only execute first enabled handler
       }
     }
+  }, [])
+
+  // Whether execute() would currently run a handler for this action.
+  const canExecute = useCallback((actionId: ActionId): boolean => {
+    const handlers = handlersRef.current.get(actionId) || []
+    return handlers.some(handler => !handler.enabled || handler.enabled())
   }, [])
 
   // Get hotkey for action
@@ -110,6 +120,7 @@ export function ActionRegistryProvider({ children }: { children: React.ReactNode
   const value: ActionRegistryContextType = {
     register,
     execute,
+    canExecute,
     getHotkey,
     getHotkeyDisplay,
     getAction,

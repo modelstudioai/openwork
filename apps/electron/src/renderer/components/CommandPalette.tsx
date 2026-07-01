@@ -52,7 +52,7 @@ const EXCLUDED_ACTIONS = new Set<ActionId>([
 
 export function CommandPalette() {
   const { t } = useTranslation()
-  const { execute, getHotkeyDisplay } = useActionRegistry()
+  const { execute, canExecute, getHotkeyDisplay } = useActionRegistry()
   const [open, setOpen] = useState(false)
 
   // ⌘K / Ctrl+K toggles the palette.
@@ -70,6 +70,11 @@ export function CommandPalette() {
         heading: t(categoryLabelKey(category)),
         items: actions
           .filter(action => !EXCLUDED_ACTIONS.has(action.id as ActionId))
+          // Only list actions that can actually run right now — hide
+          // context-scoped ones (e.g. navigator/search actions) whose handler
+          // is disabled, so the palette never shows a dead entry. Evaluated as
+          // the palette opens, i.e. against the focus you're returning to.
+          .filter(action => canExecute(action.id as ActionId))
           .map(action => {
             const id = action.id as ActionId
             const labelKey = ACTION_LABEL_KEYS[id]
@@ -87,8 +92,13 @@ export function CommandPalette() {
 
   const runAction = useCallback(
     (id: ActionId) => {
+      // Close first, then run on the next tick. Closing the dialog restores
+      // focus to the element that was active before the palette opened, so the
+      // action runs in the app's real focus context — actions that open a panel
+      // or move focus (e.g. Search) would otherwise fire mid-teardown and get
+      // clobbered by the dialog's focus restoration.
       setOpen(false)
-      execute(id)
+      setTimeout(() => execute(id), 0)
     },
     [execute],
   )

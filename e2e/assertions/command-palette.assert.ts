@@ -79,6 +79,17 @@ const assertion: Assertion = {
       throw new Error('expected a "Toggle Theme" row in the unfiltered palette');
     }
 
+    // 2b. The palette only lists actions that can actually run. Context-scoped
+    //     actions whose handler is disabled here (e.g. "Next Search Match", which
+    //     needs an active in-conversation search) must NOT appear — clicking them
+    //     would be a dead no-op.
+    const hasDeadAction = await session.evaluate<boolean>(
+      `${VISIBLE_ITEMS_EXPR}.some(el => /next search match/i.test(el.textContent || ''))`,
+    );
+    if (hasDeadAction) {
+      throw new Error('palette listed a non-executable action ("Next Search Match")');
+    }
+
     // 3. Typing "theme" narrows the list: fewer rows, every visible row matches,
     //    and Toggle Theme survives.
     await session.evaluate(setInputExpr('theme'));
