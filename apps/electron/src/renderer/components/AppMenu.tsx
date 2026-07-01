@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { isMac } from "@/lib/platform"
-import { useActionLabel } from "@/actions"
+import { useActionLabel, useActionRegistry } from "@/actions"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -187,6 +187,8 @@ export function AppMenu({
   const newWindowHotkey = useActionLabel('app.newWindow').hotkey
   const settingsHotkey = useActionLabel('app.settings').hotkey
   const keyboardShortcutsHotkey = useActionLabel('app.keyboardShortcuts').hotkey
+  const commandPaletteHotkey = useActionLabel('app.commandPalette').hotkey
+  const { execute } = useActionRegistry()
   const quitHotkey = useActionLabel('app.quit').hotkey
   const goBackHotkey = useActionLabel('nav.goBackAlt').hotkey
   const goForwardHotkey = useActionLabel('nav.goForwardAlt').hotkey
@@ -225,6 +227,12 @@ export function AppMenu({
               {newWindowHotkey && <DropdownMenuShortcut className="pl-6">{newWindowHotkey}</DropdownMenuShortcut>}
             </StyledDropdownMenuItem>
           )}
+
+          <StyledDropdownMenuItem onClick={() => execute('app.commandPalette')}>
+            <Icons.Command className="h-3.5 w-3.5" />
+            {t('commands.title')}
+            {commandPaletteHotkey && <DropdownMenuShortcut className="pl-6">{commandPaletteHotkey}</DropdownMenuShortcut>}
+          </StyledDropdownMenuItem>
 
           <StyledDropdownMenuSeparator />
 

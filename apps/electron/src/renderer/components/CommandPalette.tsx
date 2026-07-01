@@ -1,0 +1,141 @@
+/**
+ * CommandPalette
+ *
+ * A global, keyboard-driven overlay (⌘K / Ctrl+K) to search for and run any
+ * registered app action — the "run surface" that pairs with the read-only
+ * Keyboard Shortcuts reference.
+ *
+ * Fully frontend-only: it lists the centralized action registry, filters with
+ * cmdk's built-in fuzzy match, and dispatches the chosen action through the
+ * registry's `execute()` — exactly as if the action's hotkey had been pressed.
+ *
+ * Self-contained: it registers its own open handler (`app.commandPalette`),
+ * owns its open state, and integrates with the modal stack for layered close.
+ */
+
+import { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandShortcut,
+} from '@/components/ui/command'
+import { useRegisterModal } from '@/context/ModalContext'
+import {
+  useAction,
+  useActionRegistry,
+  actionsByCategory,
+  ACTION_LABEL_KEYS,
+  categoryLabelKey,
+  type ActionId,
+} from '@/actions'
+
+// Actions that should not appear as palette entries:
+//  - the palette's own open action (running it from inside the palette is a no-op)
+//  - the arrow-key alternates of Go Back / Go Forward (duplicate labels; the
+//    primary bracket-key actions already represent them)
+const EXCLUDED_ACTIONS = new Set<ActionId>([
+  'app.commandPalette',
+  'nav.goBackAlt',
+  'nav.goForwardAlt',
+])
+
+export function CommandPalette() {
+  const { t } = useTranslation()
+  const { execute, getHotkeyDisplay } = useActionRegistry()
+  const [open, setOpen] = useState(false)
+
+  // ⌘K / Ctrl+K toggles the palette.
+  useAction('app.commandPalette', () => setOpen(prev => !prev))
+
+  // Participate in the layered modal stack (Cmd+W / X close the topmost modal).
+  const handleClose = useCallback(() => setOpen(false), [])
+  useRegisterModal(open, handleClose)
+
+  // Build the grouped, display-ready action list once.
+  const groups = useMemo(() => {
+    return Object.entries(actionsByCategory)
+      .map(([category, actions]) => ({
+        category,
+        heading: t(categoryLabelKey(category)),
+        items: actions
+          .filter(action => !EXCLUDED_ACTIONS.has(action.id as ActionId))
+          .map(action => {
+            const id = action.id as ActionId
+            const labelKey = ACTION_LABEL_KEYS[id]
+            return {
+              id,
+              label: labelKey ? t(labelKey) : action.label,
+              hotkey: getHotkeyDisplay(id),
+            }
+          }),
+      }))
+      .filter(group => group.items.length > 0)
+    // getHotkeyDisplay / t are stable enough for a menu; recompute on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const runAction = useCallback(
+    (id: ActionId) => {
+      setOpen(false)
+      execute(id)
+    },
+    [execute],
+  )
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent
+        showCloseButton={false}
+        className="overflow-hidden p-0"
+        data-testid="command-palette"
+        aria-label={t('commands.title')}
+      >
+        <DialogTitle className="sr-only">{t('commands.title')}</DialogTitle>
+        <DialogDescription className="sr-only">
+          {t('commands.searchCommands')}
+        </DialogDescription>
+        <Command
+          className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+        >
+          <CommandInput
+            data-testid="command-palette-input"
+            placeholder={t('commands.searchCommands')}
+          />
+          <CommandList>
+            <CommandEmpty data-testid="command-palette-empty">
+              {t('common.noResultsFound')}
+            </CommandEmpty>
+            {groups.map(group => (
+              <CommandGroup key={group.category} heading={group.heading}>
+                {group.items.map(item => (
+                  <CommandItem
+                    key={item.id}
+                    value={`${item.label} ${item.id}`}
+                    data-testid="command-palette-item"
+                    onSelect={() => runAction(item.id)}
+                  >
+                    <span>{item.label}</span>
+                    {item.hotkey && (
+                      <CommandShortcut>{item.hotkey}</CommandShortcut>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </DialogContent>
+    </Dialog>
+  )
+}

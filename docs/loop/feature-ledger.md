@@ -32,4 +32,5 @@ log, not the system of record.
 
 | slug | title | source | feasibility | status | issue | pr | branch | updated | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| _(empty)_ | _first run appends here_ | | | | | | | | |
+| command-palette | Global command palette (⌘K/Ctrl+K) to search & run any action | Claude Code Desktop ⌘K / VS Code & Codex ⌘⇧P / Linear ⌘K | frontend-only | pr-open | [#41](https://github.com/modelstudioai/openwork/issues/41) | [#42](https://github.com/modelstudioai/openwork/pull/42) | loop/command-palette | 2026-07-01 | Reuses action registry `execute()` + cmdk primitives; zero new i18n keys. CDP e2e 2/2 pass. typecheck/test +0 vs main. |
+| settings-search | Add searchable filtering to the settings navigator | Claude Code Desktop / VS Code / Codex settings search | frontend-only | pr-open | [#39](https://github.com/modelstudioai/openwork/issues/39) | [#40](https://github.com/modelstudioai/openwork/pull/40) | loop/settings-search | 2026-07-01 | Awaiting human review. CDP assertion 2/2 passed. |

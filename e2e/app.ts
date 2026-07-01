@@ -120,9 +120,15 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   //  - CRAFT_USER_DATA_DIR  → Electron userData (cache, cookies, local storage)
   //  - CRAFT_CONFIG_DIR     → app config + project-workspace registry (~/.craft-agent)
   //  - QWEN_DEFAULT_WORKSPACE_DIR → the default conversation workspace (else ~/Documents)
-  const userDataDir = join(E2E_DIR, 'user-data');
-  const configDir = join(E2E_DIR, 'config');
-  const workspaceDir = join(E2E_DIR, 'workspace');
+  //
+  // The dirs are keyed on the (unique) debug port so each assertion gets its own
+  // profile. Electron's single-instance lock is keyed on userData: if a prior
+  // assertion's instance is still shutting down, a shared dir would make this
+  // launch defer to it and never create a renderer target. Per-port dirs keep
+  // the launches independent.
+  const userDataDir = join(E2E_DIR, `user-data-${port}`);
+  const configDir = join(E2E_DIR, `config-${port}`);
+  const workspaceDir = join(E2E_DIR, `workspace-${port}`);
   mkdirSync(userDataDir, { recursive: true });
   mkdirSync(configDir, { recursive: true });
   mkdirSync(workspaceDir, { recursive: true });

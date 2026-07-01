@@ -16,6 +16,7 @@ import type { AppShellContextType } from '@/context/AppShellContext'
 import { OnboardingWizard, ReauthScreen } from '@/components/onboarding'
 import { WorkspacePicker } from '@/components/workspace'
 import { ResetConfirmationDialog } from '@/components/ResetConfirmationDialog'
+import { CommandPalette } from '@/components/CommandPalette'
 import { SplashScreen } from '@/components/SplashScreen'
 import { TooltipProvider } from '@craft-agent/ui'
 import { FocusProvider } from '@/context/FocusContext'
@@ -2495,6 +2496,9 @@ export default function App() {
         >
           {/* Handle window close requests (X button, Cmd+W) - close modal first if open */}
           <WindowCloseHandler />
+
+          {/* Global command palette (⌘K / Ctrl+K) — search and run any action */}
+          <CommandPalette />
 
           {/* Splash screen overlay - fades out when fully ready */}
           {showSplash && (
