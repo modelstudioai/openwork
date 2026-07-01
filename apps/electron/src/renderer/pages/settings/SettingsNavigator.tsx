@@ -3,13 +3,15 @@
  *
  * Navigator panel content for settings. Displays a list of settings sections
  * (App, Workspace, Shortcuts, Preferences) that can be selected to show in the details panel.
+ * A search box at the top filters the sections by their title and description,
+ * matching the searchable-settings affordance found in comparable desktop apps.
  *
  * Styling follows SessionList/SourcesListPanel patterns for visual consistency.
  */
 
-import { useState, useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { MoreHorizontal, AppWindow } from 'lucide-react'
+import { MoreHorizontal, AppWindow, Search, X } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -148,6 +150,8 @@ export default function SettingsNavigator({
   onSelectSubpage,
 }: SettingsNavigatorProps) {
   const { t } = useTranslation()
+  const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const settingsItems: SettingsItem[] = useMemo(() =>
     SETTINGS_ITEMS.map((item) => ({
@@ -159,20 +163,78 @@ export default function SettingsNavigator({
     [t]
   )
 
+  const normalizedQuery = query.trim().toLowerCase()
+  const filteredItems = useMemo(() => {
+    if (!normalizedQuery) return settingsItems
+    return settingsItems.filter((item) =>
+      `${item.label} ${item.description}`.toLowerCase().includes(normalizedQuery)
+    )
+  }, [settingsItems, normalizedQuery])
+
+  const hasQuery = normalizedQuery.length > 0
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto">
-        <div className="pt-2">
-          {settingsItems.map((item, index) => (
-            <SettingsItemRow
-              key={item.id}
-              item={item}
-              isSelected={selectedSubpage === item.id}
-              isFirst={index === 0}
-              onSelect={() => onSelectSubpage(item.id)}
-            />
-          ))}
+    <div className="flex flex-col h-full" data-testid="settings-navigator">
+      {/* Search box — filters sections by title + description */}
+      <div className="shrink-0 px-2 pt-2 pb-1.5 border-b border-border/50">
+        <div className="relative rounded-[8px] shadow-minimal bg-muted/50 has-[:focus-visible]:bg-background">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            type="text"
+            role="searchbox"
+            aria-label={t('common.search')}
+            data-testid="settings-search-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && query) {
+                e.preventDefault()
+                e.stopPropagation()
+                setQuery('')
+              }
+            }}
+            placeholder={t('common.search')}
+            className="w-full h-8 pl-8 pr-8 text-sm bg-transparent border-0 rounded-[8px] outline-none focus-visible:ring-0 focus-visible:outline-none placeholder:text-muted-foreground/50"
+          />
+          {hasQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('')
+                inputRef.current?.focus()
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-foreground/10 rounded"
+              title={t('common.clear')}
+              aria-label={t('common.clear')}
+            >
+              <X className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
+          )}
         </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {filteredItems.length > 0 ? (
+          <div className="pt-2">
+            {filteredItems.map((item, index) => (
+              <SettingsItemRow
+                key={item.id}
+                item={item}
+                isSelected={selectedSubpage === item.id}
+                isFirst={index === 0}
+                onSelect={() => onSelectSubpage(item.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div
+            data-testid="settings-search-empty"
+            className="px-4 py-8 text-center text-sm text-muted-foreground"
+          >
+            {t('common.noResultsFound')}
+          </div>
+        )}
       </div>
     </div>
   )

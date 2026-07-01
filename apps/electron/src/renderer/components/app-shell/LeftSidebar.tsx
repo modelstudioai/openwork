@@ -485,6 +485,7 @@ const SidebarButton = React.forwardRef<HTMLButtonElement, SidebarButtonProps & R
           if (!isOverlay && itemProps?.ref) itemProps.ref(el)
         }}
         onClick={isOverlay ? undefined : link.onClick}
+        data-testid={link.id}
         data-tutorial={link.dataTutorial}
         className={cn(
           "group flex w-full items-center gap-2 rounded-[6px] text-[13px] select-none outline-none",
