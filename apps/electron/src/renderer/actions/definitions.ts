@@ -39,6 +39,13 @@ export const actions = {
     defaultHotkey: 'mod+f',
     category: 'General',
   },
+  'app.commandPalette': {
+    id: 'app.commandPalette',
+    label: 'Command Palette',
+    description: 'Search and run any command',
+    defaultHotkey: 'mod+k',
+    category: 'General',
+  },
   'app.keyboardShortcuts': {
     id: 'app.keyboardShortcuts',
     label: 'Keyboard Shortcuts',
