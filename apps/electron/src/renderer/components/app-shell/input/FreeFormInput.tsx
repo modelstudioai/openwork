@@ -12,6 +12,7 @@ import {
   AlertCircle,
   CornerDownRight,
   GitBranch,
+  Brain,
   X,
 } from 'lucide-react';
 import { Icon_Home, Icon_Folder } from '@craft-agent/ui';
@@ -81,7 +82,11 @@ import {
   PERMISSION_MODE_ORDER,
   type PermissionMode,
 } from '@craft-agent/shared/agent/modes';
-import { type ThinkingLevel } from '@craft-agent/shared/agent/thinking-levels';
+import {
+  type ThinkingLevel,
+  THINKING_LEVELS,
+  getThinkingLevelNameKey,
+} from '@craft-agent/shared/agent/thinking-levels';
 import { useEscapeInterrupt } from '@/context/EscapeInterruptContext';
 import { hasOpenOverlay } from '@/lib/overlay-detection';
 import { ToolbarStatusSlot } from './ToolbarStatusSlot';
@@ -443,6 +448,7 @@ export function FreeFormInput({
   currentModel,
   onModelChange,
   thinkingLevel = 'medium',
+  onThinkingLevelChange,
   permissionMode = 'ask',
   onPermissionModeChange,
   enabledModes = [...PERMISSION_MODE_ORDER],
@@ -842,6 +848,7 @@ export function FreeFormInput({
   const [loadingCount, setLoadingCount] = React.useState(0);
   const [inputMaxHeight, setInputMaxHeight] = React.useState(540);
   const [modelDropdownOpen, setModelDropdownOpen] = React.useState(false);
+  const [thinkingDropdownOpen, setThinkingDropdownOpen] = React.useState(false);
 
   // Input settings (loaded from config)
   const [autoCapitalisation, setAutoCapitalisation] = React.useState(true);
@@ -2557,6 +2564,66 @@ export function FreeFormInput({
                   usedDisplay={contextUsageIndicator.usedDisplay}
                   totalDisplay={contextUsageIndicator.totalDisplay}
                 />
+              )}
+
+              {/* 4.5 Thinking Level Selector - Hidden in compact mode (mirrors model picker) */}
+              {!compactMode && onThinkingLevelChange && (
+                <DropdownMenu
+                  open={thinkingDropdownOpen}
+                  onOpenChange={setThinkingDropdownOpen}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          data-testid="thinking-level-trigger"
+                          className={cn(
+                            'input-toolbar-btn inline-flex items-center h-7 px-1.5 gap-1 text-[13px] shrink-0 rounded-[6px] hover:bg-foreground/5 transition-colors select-none',
+                            thinkingDropdownOpen && 'bg-foreground/5',
+                          )}
+                        >
+                          <Brain className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                          {t(getThinkingLevelNameKey(thinkingLevel))}
+                          <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {t('settings.ai.thinking')}
+                    </TooltipContent>
+                  </Tooltip>
+                  <StyledDropdownMenuContent
+                    side="top"
+                    align="end"
+                    sideOffset={8}
+                    className="min-w-[240px]"
+                  >
+                    {THINKING_LEVELS.map((level) => {
+                      const isSelected = thinkingLevel === level.id;
+                      return (
+                        <StyledDropdownMenuItem
+                          key={level.id}
+                          data-testid="thinking-level-item"
+                          onSelect={() => onThinkingLevelChange(level.id)}
+                          className="flex items-center justify-between px-2 py-2 rounded-lg cursor-pointer"
+                        >
+                          <div className="text-left">
+                            <div className="font-medium text-sm">
+                              {t(level.nameKey)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {t(level.descriptionKey)}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <Check className="h-3 w-3 text-foreground shrink-0 ml-3" />
+                          )}
+                        </StyledDropdownMenuItem>
+                      );
+                    })}
+                  </StyledDropdownMenuContent>
+                </DropdownMenu>
               )}
 
               {/* 5. Model Selector - Hidden in compact mode (EditPopover embedding) */}
