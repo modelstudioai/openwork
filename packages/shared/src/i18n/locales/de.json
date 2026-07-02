@@ -215,6 +215,7 @@
   "chat.processing.zipping": "Flitzt...",
   "chat.processing.zooming": "Rast...",
   "chat.renameSession": "Sitzung umbenennen",
+  "chat.scrollToBottom": "Nach unten scrollen",
   "chat.scrollUpForEarlier": "Nach oben scrollen für ältere Nachrichten ({{count}} weitere)",
   "chat.selectedText": "Ausgewählter Text",
   "chat.session": "Sitzung",
