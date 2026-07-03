@@ -785,6 +785,8 @@
   "settings.appearance.mode": "モード",
   "settings.appearance.noToolIcons": "ツールアイコンのマッピングが見つかりません",
   "settings.appearance.richToolDescriptions": "リッチなツール説明",
+  "settings.appearance.reduceMotion": "モーションを減らす",
+  "settings.appearance.reduceMotionDesc": "アプリ全体のアニメーションとトランジションを最小限にします。",
   "settings.appearance.pet": "ペット",
   "settings.appearance.petDesc": "エージェントの動きに反応するコンパニオン。",
   "settings.appearance.petEnabled": "ペットを表示",

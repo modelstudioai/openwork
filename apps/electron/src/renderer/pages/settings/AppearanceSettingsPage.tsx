@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { HeaderMenu } from '@/components/ui/HeaderMenu'
 import { EditPopover, EditButton, getEditConfig } from '@/components/ui/EditPopover'
 import { useTheme } from '@/context/ThemeContext'
+import { useReduceMotion } from '@/context/ReduceMotionContext'
 import { useAppShellContext } from '@/context/AppShellContext'
 import { routes } from '@/lib/navigate'
 import { FolderOpen, Monitor, RefreshCw, Sun, Moon } from 'lucide-react'
@@ -138,6 +139,9 @@ export default function AppearanceSettingsPage() {
     setRichToolDescriptions(checked)
     await window.electronAPI?.setRichToolDescriptions?.(checked)
   }, [])
+
+  // Reduce motion toggle (renderer-only preference, persisted in localStorage)
+  const { reduceMotion, setReduceMotion } = useReduceMotion()
 
   // Pet companion settings + custom pets (synced via shared Jotai atoms)
   const {
@@ -375,6 +379,13 @@ export default function AppearanceSettingsPage() {
                     description={t("settings.appearance.richToolDescriptionsDesc")}
                     checked={richToolDescriptions}
                     onCheckedChange={handleRichToolDescriptionsChange}
+                  />
+                  <SettingsToggle
+                    label={t("settings.appearance.reduceMotion")}
+                    description={t("settings.appearance.reduceMotionDesc")}
+                    checked={reduceMotion}
+                    onCheckedChange={setReduceMotion}
+                    testId="reduce-motion-toggle"
                   />
                 </SettingsCard>
               </SettingsSection>
