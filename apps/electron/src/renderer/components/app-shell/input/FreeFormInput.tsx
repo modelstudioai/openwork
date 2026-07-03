@@ -13,6 +13,8 @@ import {
   CornerDownRight,
   GitBranch,
   Brain,
+  Maximize2,
+  Minimize2,
   X,
 } from 'lucide-react';
 import { Icon_Home, Icon_Folder } from '@craft-agent/ui';
@@ -847,6 +849,11 @@ export function FreeFormInput({
   const [isDraggingOver, setIsDraggingOver] = React.useState(false);
   const [loadingCount, setLoadingCount] = React.useState(0);
   const [inputMaxHeight, setInputMaxHeight] = React.useState(540);
+  // Height the input grows to when the user maximizes the composer (see the
+  // expand toggle in the toolbar). Recomputed from the window in the resize
+  // effect below so it always fills a large share of the available height.
+  const [expandedMaxHeight, setExpandedMaxHeight] = React.useState(720);
+  const [isComposerExpanded, setIsComposerExpanded] = React.useState(false);
   const [modelDropdownOpen, setModelDropdownOpen] = React.useState(false);
   const [thinkingDropdownOpen, setThinkingDropdownOpen] = React.useState(false);
 
@@ -885,11 +892,20 @@ export function FreeFormInput({
     const updateMaxHeight = () => {
       const maxFromWindow = Math.floor(window.innerHeight * 0.66);
       setInputMaxHeight(Math.min(maxFromWindow, 540));
+      // Maximized composer fills most of the window, floored so it is always
+      // meaningfully taller than the collapsed cap even on short windows.
+      setExpandedMaxHeight(Math.max(Math.floor(window.innerHeight * 0.78), 560));
     };
     updateMaxHeight();
     window.addEventListener('resize', updateMaxHeight);
     return () => window.removeEventListener('resize', updateMaxHeight);
   }, []);
+
+  // Collapse the maximized composer when switching sessions so a new
+  // conversation always starts from the compact input.
+  React.useEffect(() => {
+    setIsComposerExpanded(false);
+  }, [sessionId]);
 
   const dragCounterRef = React.useRef(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -2453,7 +2469,11 @@ export function FreeFormInput({
             workspaceId={workspaceSlug}
             slashCommandNames={richInputSlashCommandNames}
             className="pl-5 pr-4 pt-4 pb-3 overflow-y-auto min-h-[88px]"
-            style={{ maxHeight: inputMaxHeight }}
+            style={
+              isComposerExpanded
+                ? { maxHeight: expandedMaxHeight, minHeight: expandedMaxHeight }
+                : { maxHeight: inputMaxHeight }
+            }
             data-tutorial="chat-input"
             spellCheck={spellCheck}
           />
@@ -2554,6 +2574,37 @@ export function FreeFormInput({
 
             {/* Right side: Context + Model + Send - never shrink so they're always visible */}
             <div className="flex items-center shrink-0">
+              {/* 3.5 Expand / collapse composer - Hidden in compact mode (mirrors model/thinking pickers) */}
+              {!compactMode && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="composer-expand-toggle"
+                      aria-pressed={isComposerExpanded}
+                      onClick={() => setIsComposerExpanded((prev) => !prev)}
+                      className={cn(
+                        'input-toolbar-btn inline-flex items-center justify-center h-7 w-7 shrink-0 rounded-[6px] hover:bg-foreground/5 transition-colors select-none',
+                        isComposerExpanded && 'bg-foreground/5',
+                      )}
+                    >
+                      {isComposerExpanded ? (
+                        <Minimize2 className="h-3.5 w-3.5 opacity-70" />
+                      ) : (
+                        <Maximize2 className="h-3.5 w-3.5 opacity-70" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {t(
+                      isComposerExpanded
+                        ? 'chat.collapseComposer'
+                        : 'chat.expandComposer',
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+
               {/* 4. Context Usage Indicator */}
               {!compactMode && contextUsageIndicator && (
                 <ContextUsageIndicator
