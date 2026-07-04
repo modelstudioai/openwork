@@ -202,6 +202,13 @@ export const actions = {
     category: 'Chat',
     when: '!inputFocus && !menuOpen',
   },
+  'chat.openThinkingMenu': {
+    id: 'chat.openThinkingMenu',
+    label: 'Open Thinking Menu',
+    description: 'Open the thinking (reasoning effort) menu in the chat composer',
+    defaultHotkey: 'mod+shift+e',
+    category: 'Chat',
+  },
   'chat.nextSearchMatch': {
     id: 'chat.nextSearchMatch',
     label: 'Next Search Match',

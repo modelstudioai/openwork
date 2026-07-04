@@ -103,6 +103,10 @@ import {
   consumePendingFocusForSession,
 } from './focus-input-events';
 import {
+  COMPOSER_MENU_EVENT,
+  type ComposerMenuEventDetail,
+} from './composer-menu-events';
+import {
   getRecentWorkingDirs,
   addRecentWorkingDir,
   removeRecentWorkingDir,
@@ -1290,6 +1294,33 @@ export function FreeFormInput({
     return () =>
       window.removeEventListener('craft:focus-input', handleFocusInput);
   }, [sessionId, isFocusedPanel, richInputRef]);
+
+  // Listen for craft:open-composer-menu events (open a toolbar menu from a
+  // global keyboard shortcut). Scoped like focus-input so the focused panel's
+  // composer responds.
+  React.useEffect(() => {
+    const handleOpenMenu = (e: Event) => {
+      const detail = (e as CustomEvent<ComposerMenuEventDetail>).detail;
+      if (
+        !shouldHandleScopedInputEvent({
+          sessionId,
+          isFocusedPanel,
+          targetSessionId: detail?.sessionId,
+        })
+      )
+        return;
+
+      if (detail?.menu === 'thinking') {
+        // The thinking picker only renders in the full (non-compact) toolbar.
+        if (compactMode || !onThinkingLevelChange) return;
+        setThinkingDropdownOpen(true);
+      }
+    };
+
+    window.addEventListener(COMPOSER_MENU_EVENT, handleOpenMenu);
+    return () =>
+      window.removeEventListener(COMPOSER_MENU_EVENT, handleOpenMenu);
+  }, [sessionId, isFocusedPanel, compactMode, onThinkingLevelChange]);
 
   // Recover queued focus requests after session switch/mount races.
   React.useEffect(() => {
