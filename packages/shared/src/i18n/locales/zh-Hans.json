@@ -255,6 +255,7 @@
   "chatInput.placeholder.typeMessage": "输入消息...",
   "chatInput.placeholder.workOn": "想做什么?",
   "commands.searchCommands": "搜索命令...",
+  "commands.recent": "最近使用",
   "commands.title": "命令",
   "common.back": "返回",
   "common.backToList": "返回列表",

@@ -56,6 +56,9 @@ export const KEYS = {
   // Settings navigation
   lastSettingsSubpage: 'last-settings-subpage',
 
+  // Command palette (most-recently-run action IDs, newest first)
+  commandPaletteRecents: 'command-palette-recents',
+
   // Appearance
   showConnectionIcons: 'show-connection-icons',
   reduceMotion: 'reduce-motion', // Minimize animations/transitions app-wide

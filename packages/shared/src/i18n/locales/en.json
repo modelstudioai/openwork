@@ -255,6 +255,7 @@
   "chatInput.placeholder.typeMessage": "Type a message...",
   "chatInput.placeholder.workOn": "What would you like to work on?",
   "commands.searchCommands": "Search commands...",
+  "commands.recent": "Recently used",
   "commands.title": "Commands",
   "common.back": "Back",
   "common.backToList": "Back to list",
