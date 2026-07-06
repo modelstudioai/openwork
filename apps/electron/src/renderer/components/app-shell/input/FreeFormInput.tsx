@@ -77,6 +77,7 @@ import { resolveEffectiveConnectionSlug } from '@config/llm-connections';
 import { useOptionalAppShellContext } from '@/context/AppShellContext';
 import { EditPopover, getEditConfig } from '@/components/ui/EditPopover';
 import { FreeFormInputContextBadge } from './FreeFormInputContextBadge';
+import { ComposerCountIndicator } from './ComposerCountIndicator';
 import type {
   AvailableSlashCommand,
   FileAttachment,
@@ -2741,6 +2742,9 @@ export function FreeFormInput({
                 )}
               </div>
             )}
+
+            {/* 3. Draft word/character count - hidden in compact mode and when empty */}
+            {!compactMode && <ComposerCountIndicator text={input} />}
 
             {/* Spacer — or the voice recording bar while dictating */}
             {voice.isActive ? (
