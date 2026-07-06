@@ -785,6 +785,8 @@
   "settings.appearance.mode": "模式",
   "settings.appearance.noToolIcons": "未找到工具图标映射",
   "settings.appearance.richToolDescriptions": "丰富的工具描述",
+  "settings.appearance.reduceMotion": "减少动态效果",
+  "settings.appearance.reduceMotionDesc": "在整个应用中尽量减少动画和过渡效果。",
   "settings.appearance.pet": "宠物",
   "settings.appearance.petDesc": "一个会根据 agent 当前状态做出反应的小伙伴。",
   "settings.appearance.petEnabled": "显示宠物伙伴",
