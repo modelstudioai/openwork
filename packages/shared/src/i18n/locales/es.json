@@ -787,6 +787,8 @@
   "settings.appearance.mode": "Modo",
   "settings.appearance.noToolIcons": "No se encontraron asignaciones de iconos de herramientas",
   "settings.appearance.richToolDescriptions": "Descripciones detalladas de herramientas",
+  "settings.appearance.reduceMotion": "Reducir movimiento",
+  "settings.appearance.reduceMotionDesc": "Minimiza las animaciones y transiciones en toda la aplicación.",
   "settings.appearance.pet": "Mascota",
   "settings.appearance.petDesc": "Un compañero que reacciona a lo que hace el agente.",
   "settings.appearance.petEnabled": "Mostrar mascota",

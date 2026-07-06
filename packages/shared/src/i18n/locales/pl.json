@@ -787,6 +787,8 @@
   "settings.appearance.mode": "Tryb",
   "settings.appearance.noToolIcons": "Nie znaleziono mapowań ikon narzędzi",
   "settings.appearance.richToolDescriptions": "Rozbudowane opisy narzędzi",
+  "settings.appearance.reduceMotion": "Ogranicz ruch",
+  "settings.appearance.reduceMotionDesc": "Ogranicz animacje i przejścia w całej aplikacji.",
   "settings.appearance.pet": "Maskotka",
   "settings.appearance.petDesc": "Towarzysz reagujący na to, co robi agent.",
   "settings.appearance.petEnabled": "Pokaż maskotkę",

@@ -6,6 +6,7 @@ import { captureConsoleIntegration } from '@sentry/react'
 import { Provider as JotaiProvider, useAtomValue } from 'jotai'
 import App from './App'
 import { ThemeProvider } from './context/ThemeContext'
+import { ReduceMotionProvider } from './context/ReduceMotionContext'
 import { windowWorkspaceIdAtom } from './atoms/sessions'
 import { Toaster } from '@/components/ui/sonner'
 import { PetWindowController } from '@/components/pet/PetWindowController'
@@ -106,9 +107,11 @@ function Root() {
 
   return (
     <ThemeProvider activeWorkspaceId={workspaceId}>
-      <App />
-      <Toaster />
-      <PetWindowController />
+      <ReduceMotionProvider>
+        <App />
+        <Toaster />
+        <PetWindowController />
+      </ReduceMotionProvider>
     </ThemeProvider>
   )
 }

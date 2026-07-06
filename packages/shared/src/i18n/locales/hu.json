@@ -787,6 +787,8 @@
   "settings.appearance.mode": "Mód",
   "settings.appearance.noToolIcons": "Nem található eszközikon-hozzárendelés",
   "settings.appearance.richToolDescriptions": "Részletes eszközleírások",
+  "settings.appearance.reduceMotion": "Mozgás csökkentése",
+  "settings.appearance.reduceMotionDesc": "Az animációk és átmenetek minimalizálása az egész alkalmazásban.",
   "settings.appearance.pet": "Kabala",
   "settings.appearance.petDesc": "Egy társ, aki reagál arra, amit az ügynök csinál.",
   "settings.appearance.petEnabled": "Kabala megjelenítése",

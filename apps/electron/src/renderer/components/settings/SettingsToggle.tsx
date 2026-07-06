@@ -25,6 +25,8 @@ export interface SettingsToggleProps {
   className?: string
   /** Whether the toggle is inside a card (affects padding) */
   inCard?: boolean
+  /** Optional test id forwarded to the underlying switch (for e2e) */
+  testId?: string
 }
 
 /**
@@ -48,6 +50,7 @@ export function SettingsToggle({
   disabled,
   className,
   inCard = true,
+  testId,
 }: SettingsToggleProps) {
   const id = React.useId()
 
@@ -73,6 +76,7 @@ export function SettingsToggle({
         onCheckedChange={onCheckedChange}
         disabled={disabled}
         data-layout="settings-control"
+        data-testid={testId}
         className="ml-4 shrink-0"
       />
     </div>
