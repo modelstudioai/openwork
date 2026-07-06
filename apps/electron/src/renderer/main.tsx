@@ -7,6 +7,7 @@ import { Provider as JotaiProvider, useAtomValue } from 'jotai'
 import App from './App'
 import { ThemeProvider } from './context/ThemeContext'
 import { ReduceMotionProvider } from './context/ReduceMotionContext'
+import { ConversationWidthProvider } from './context/ConversationWidthContext'
 import { windowWorkspaceIdAtom } from './atoms/sessions'
 import { Toaster } from '@/components/ui/sonner'
 import { PetWindowController } from '@/components/pet/PetWindowController'
@@ -108,9 +109,11 @@ function Root() {
   return (
     <ThemeProvider activeWorkspaceId={workspaceId}>
       <ReduceMotionProvider>
-        <App />
-        <Toaster />
-        <PetWindowController />
+        <ConversationWidthProvider>
+          <App />
+          <Toaster />
+          <PetWindowController />
+        </ConversationWidthProvider>
       </ReduceMotionProvider>
     </ThemeProvider>
   )

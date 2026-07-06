@@ -1712,8 +1712,11 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
               }}
             >
               <ScrollArea className="h-full min-w-0" viewportRef={scrollViewportRef} data-testid="chat-transcript">
-              <div className={cn(
-                CHAT_LAYOUT.maxWidth,
+              <div
+                data-testid="chat-messages-container"
+                style={compactMode ? undefined : { maxWidth: 'var(--chat-content-max-width, 840px)' }}
+                className={cn(
+                compactMode && CHAT_LAYOUT.maxWidth,
                 "mx-auto min-w-0",
                 compactMode ? "px-3 py-4 space-y-2" : [CHAT_LAYOUT.containerPadding, CHAT_LAYOUT.messageSpacing]
               )}>
