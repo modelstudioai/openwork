@@ -1371,3 +1371,18 @@ html.dark[data-scenic] .fullscreen-overlay-background {
   min-height: 31px;
   padding: 6px 8px;
 }
+
+/* Reduce motion: when the user enables "Reduce motion" in Appearance settings,
+   near-instantly complete CSS animations/transitions across the app. This
+   complements `motion/react`'s MotionConfig reducedMotion="always" (which handles
+   `motion` components) by covering plain CSS effects too. */
+[data-reduce-motion='true'] *,
+[data-reduce-motion='true'] *::before,
+[data-reduce-motion='true'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}

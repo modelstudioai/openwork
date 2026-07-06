@@ -67,7 +67,11 @@ function SettingsItemRow({ item, isSelected, isFirst, onSelect }: SettingsItemRo
   }
 
   return (
-    <div className="settings-item" data-selected={isSelected || undefined}>
+    <div
+      className="settings-item"
+      data-selected={isSelected || undefined}
+      data-testid={`settings-nav-${item.id}`}
+    >
       {/* Separator - only show if not first */}
       {!isFirst && (
         <div className="settings-separator pl-12 pr-4">

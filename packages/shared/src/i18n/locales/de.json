@@ -786,6 +786,8 @@
   "settings.appearance.mode": "Modus",
   "settings.appearance.noToolIcons": "Keine Werkzeugsymbol-Zuordnungen gefunden",
   "settings.appearance.richToolDescriptions": "Ausführliche Werkzeugbeschreibungen",
+  "settings.appearance.reduceMotion": "Bewegung reduzieren",
+  "settings.appearance.reduceMotionDesc": "Animationen und Übergänge in der gesamten App minimieren.",
   "settings.appearance.pet": "Begleiter",
   "settings.appearance.petDesc": "Ein Begleiter, der auf die Aktivität des Agents reagiert.",
   "settings.appearance.petEnabled": "Begleiter anzeigen",

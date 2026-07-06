@@ -12,6 +12,7 @@ log, not the system of record.
 
 | status | meaning |
 | --- | --- |
+| reduce-motion | "Reduce motion" accessibility setting in Appearance | Claude desktop / macOS / Windows reduce-motion + `prefers-reduced-motion` | frontend-only | pr-open | [#50](https://github.com/modelstudioai/openwork/issues/50) | [#51](https://github.com/modelstudioai/openwork/pull/51) | loop/reduce-motion | 2026-07-03 | Renderer-only pref (localStorage) applied app-wide via `<MotionConfig reducedMotion>` + `data-reduce-motion` on `<html>` + global CSS guard. Off ⇒ `reducedMotion="user"` (still honors OS). New `ReduceMotionProvider` in `main.tsx`; toggle in Appearance→Interface; 2 new i18n keys ×7 locales. typecheck/`bun test` zero-delta vs main (56-failure set byte-identical); renderer build ✅; i18n parity ✅. CDP assertion included; **could not run locally** (egress 403s Electron binary download). |
 | `proposed` | Identified as a gap, not started. |
 | `in-progress` | Issue filed, branch open, implementation underway. |
 | `pr-open` | PR submitted, awaiting human review/merge. |

@@ -786,6 +786,8 @@
   "settings.appearance.mode": "Mode",
   "settings.appearance.noToolIcons": "No tool icon mappings found",
   "settings.appearance.richToolDescriptions": "Rich tool descriptions",
+  "settings.appearance.reduceMotion": "Reduce motion",
+  "settings.appearance.reduceMotionDesc": "Minimize animations and transitions throughout the app.",
   "settings.appearance.pet": "Pet",
   "settings.appearance.petDesc": "A companion that reacts to what the agent is doing.",
   "settings.appearance.petEnabled": "Show pet companion",
