@@ -16,6 +16,7 @@ import { EditPopover, EditButton, getEditConfig } from '@/components/ui/EditPopo
 import { useTheme } from '@/context/ThemeContext'
 import { useReduceMotion } from '@/context/ReduceMotionContext'
 import { useConversationWidth } from '@/context/ConversationWidthContext'
+import { useChatTextSize, type ChatTextSize } from '@/context/ChatTextSizeContext'
 import { useAppShellContext } from '@/context/AppShellContext'
 import { routes } from '@/lib/navigate'
 import { FolderOpen, Monitor, RefreshCw, Sun, Moon } from 'lucide-react'
@@ -146,6 +147,8 @@ export default function AppearanceSettingsPage() {
 
   // Conversation width (renderer-only preference, persisted in localStorage)
   const { conversationWidth, setConversationWidth } = useConversationWidth()
+  // Chat text size (renderer-only preference, persisted in localStorage)
+  const { chatTextSize, setChatTextSize } = useChatTextSize()
 
   // Pet companion settings + custom pets (synced via shared Jotai atoms)
   const {
@@ -403,6 +406,21 @@ export default function AppearanceSettingsPage() {
                         { value: 'comfortable', label: t("settings.appearance.conversationWidthComfortable") },
                         { value: 'wide', label: t("settings.appearance.conversationWidthWide") },
                         { value: 'full', label: t("settings.appearance.conversationWidthFull") },
+                      ]}
+                    />
+                  </SettingsRow>
+                  <SettingsRow
+                    label={t("settings.appearance.chatTextSize")}
+                    description={t("settings.appearance.chatTextSizeDesc")}
+                  >
+                    <SettingsSegmentedControl
+                      value={chatTextSize}
+                      onValueChange={(value) => setChatTextSize(value as ChatTextSize)}
+                      testId="chat-text-size-control"
+                      options={[
+                        { value: 'small', label: t("settings.appearance.chatTextSizeSmall") },
+                        { value: 'medium', label: t("settings.appearance.chatTextSizeDefault") },
+                        { value: 'large', label: t("settings.appearance.chatTextSizeLarge") },
                       ]}
                     />
                   </SettingsRow>

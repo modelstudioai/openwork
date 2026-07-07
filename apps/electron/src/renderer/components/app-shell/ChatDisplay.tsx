@@ -1717,7 +1717,7 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                 style={compactMode ? undefined : { maxWidth: 'var(--chat-content-max-width, 840px)' }}
                 className={cn(
                 compactMode && CHAT_LAYOUT.maxWidth,
-                "mx-auto min-w-0",
+                "chat-text-scope mx-auto min-w-0",
                 compactMode ? "px-3 py-4 space-y-2" : [CHAT_LAYOUT.containerPadding, CHAT_LAYOUT.messageSpacing]
               )}>
                 {/* Session-level AnimatePresence: Prevents layout jump when switching sessions */}
