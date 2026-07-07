@@ -796,6 +796,8 @@
   "settings.appearance.conversationWidthDesc": "设置聊天记录和输入框的显示宽度。",
   "settings.appearance.conversationWidthFull": "全宽",
   "settings.appearance.conversationWidthWide": "宽",
+  "settings.appearance.increaseContrast": "提高对比度",
+  "settings.appearance.increaseContrastDesc": "增强边框、分隔线和次要文字，提升可读性。",
   "settings.appearance.pet": "宠物",
   "settings.appearance.petCustom": "自定义宠物",
   "settings.appearance.petCustomHint": "每只宠物一个文件夹，包含 pet.json 和 8x9 spritesheet，放好后刷新。",

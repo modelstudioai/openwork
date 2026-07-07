@@ -1406,3 +1406,35 @@ html.dark[data-scenic] .fullscreen-overlay-background {
 .chat-text-scope {
   font-size: calc(1em * var(--chat-font-scale));
 }
+
+/* Increase contrast: when the user enables "Increase contrast" in Appearance
+   settings, raise the contrast of the low-alpha theme tokens app-wide. Every
+   theme derives these from `--foreground` (which flips per light/dark), so the
+   alpha-based overrides work in both modes and across preset themes. The theme
+   system injects its colors as a plain `:root { … }` rule, so this
+   higher-specificity `:root[data-high-contrast='true']` selector wins without
+   `!important`. `--hc-enabled` is a marker the e2e assertion reads to confirm
+   the block actually applied. */
+:root[data-high-contrast='true'] {
+  --hc-enabled: 1;
+
+  /* Stronger borders, dividers and input outlines. */
+  --border: oklch(from var(--foreground) l c h / 0.28);
+  --input: oklch(from var(--foreground) l c h / 0.38);
+
+  /* De-dim secondary/"muted" and unfocused text so it stays readable. */
+  --muted-foreground: var(--foreground-80);
+  --foreground-dimmed: var(--foreground-90);
+  --md-bullets: var(--foreground-80);
+  --md-counters: var(--foreground-80);
+
+  /* More visible focus ring. */
+  --ring: oklch(from var(--foreground) l c h / 0.6);
+  --ring-width: 2px;
+}
+
+/* A clearly visible keyboard-focus outline for interactive elements. */
+:root[data-high-contrast='true'] :focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}

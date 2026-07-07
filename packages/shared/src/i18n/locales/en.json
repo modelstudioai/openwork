@@ -796,6 +796,8 @@
   "settings.appearance.conversationWidthDesc": "Set how wide the chat transcript and composer are.",
   "settings.appearance.conversationWidthFull": "Full",
   "settings.appearance.conversationWidthWide": "Wide",
+  "settings.appearance.increaseContrast": "Increase contrast",
+  "settings.appearance.increaseContrastDesc": "Strengthen borders, dividers, and secondary text for better readability.",
   "settings.appearance.pet": "Pet",
   "settings.appearance.petCustom": "Custom pets",
   "settings.appearance.petCustomHint": "Add a pet folder with pet.json and an 8x9 spritesheet, then refresh.",
