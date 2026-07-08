@@ -18,9 +18,11 @@ import { useReduceMotion } from '@/context/ReduceMotionContext'
 import { useConversationWidth } from '@/context/ConversationWidthContext'
 import { useChatTextSize, type ChatTextSize } from '@/context/ChatTextSizeContext'
 import { useHighContrast } from '@/context/HighContrastContext'
+import { useZoom } from '@/context/ZoomContext'
+import { Button } from '@/components/ui/button'
 import { useAppShellContext } from '@/context/AppShellContext'
 import { routes } from '@/lib/navigate'
-import { FolderOpen, Monitor, RefreshCw, Sun, Moon } from 'lucide-react'
+import { FolderOpen, Monitor, RefreshCw, Sun, Moon, Minus, Plus, RotateCcw } from 'lucide-react'
 import type { DetailsPageMeta } from '@/lib/navigation-registry'
 import type { ToolIconMapping } from '../../../shared/types'
 
@@ -145,6 +147,7 @@ export default function AppearanceSettingsPage() {
 
   // Reduce motion toggle (renderer-only preference, persisted in localStorage)
   const { reduceMotion, setReduceMotion } = useReduceMotion()
+  const { zoomPercent, zoomIn, zoomOut, resetZoom, canZoomIn, canZoomOut } = useZoom()
 
   // Conversation width (renderer-only preference, persisted in localStorage)
   const { conversationWidth, setConversationWidth } = useConversationWidth()
@@ -434,6 +437,58 @@ export default function AppearanceSettingsPage() {
                     onCheckedChange={setHighContrast}
                     testId="high-contrast-toggle"
                   />
+                  <SettingsRow
+                    label={t("settings.appearance.zoom")}
+                    description={t("settings.appearance.zoomDesc")}
+                  >
+                    <div
+                      className="flex items-center gap-1"
+                      data-testid="zoom-control"
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        aria-label={t("shortcuts.action.zoomOut")}
+                        title={t("shortcuts.action.zoomOut")}
+                        disabled={!canZoomOut}
+                        onClick={zoomOut}
+                        data-testid="zoom-out"
+                      >
+                        <Minus className="size-4" />
+                      </Button>
+                      <span
+                        className="min-w-[3.25rem] text-center text-[13px] tabular-nums text-foreground/80 select-none"
+                        data-testid="zoom-value"
+                      >
+                        {zoomPercent}%
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        aria-label={t("shortcuts.action.zoomIn")}
+                        title={t("shortcuts.action.zoomIn")}
+                        disabled={!canZoomIn}
+                        onClick={zoomIn}
+                        data-testid="zoom-in"
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 ml-1"
+                        aria-label={t("shortcuts.action.zoomReset")}
+                        title={t("shortcuts.action.zoomReset")}
+                        disabled={zoomPercent === 100}
+                        onClick={resetZoom}
+                        data-testid="zoom-reset"
+                      >
+                        <RotateCcw className="size-3.5" />
+                      </Button>
+                    </div>
+                  </SettingsRow>
                 </SettingsCard>
               </SettingsSection>
 

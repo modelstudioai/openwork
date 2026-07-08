@@ -65,6 +65,7 @@ export const KEYS = {
   conversationWidth: 'conversation-width', // Chat reading-column width: comfortable | wide | full
   chatTextSize: 'chat-text-size', // Scale conversation text without resizing the app chrome
   highContrast: 'high-contrast', // Raise contrast of borders, dividers, and muted text app-wide
+  zoomLevel: 'zoom-level', // Interface zoom factor (⌘+/⌘-/⌘0), scales the whole renderer
 
   // What's New
   whatsNewLastSeenVersion: 'whats-new-last-seen-version',
