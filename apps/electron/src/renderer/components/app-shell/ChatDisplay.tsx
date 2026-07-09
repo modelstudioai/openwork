@@ -19,6 +19,7 @@ import { toast } from "sonner"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
+import { EmptyStateSuggestions } from "@/components/app-shell/EmptyStateSuggestions"
 import { Markdown, CollapsibleMarkdownProvider, StreamingMarkdown, type RenderMode } from "@/components/markdown"
 import { AnimatedCollapsibleContent } from "@/components/ui/collapsible"
 import {
@@ -1698,6 +1699,16 @@ export const ChatDisplay = React.forwardRef<ChatDisplayHandle, ChatDisplayProps>
                     {t('chat.emptyTitle')}
                   </h1>
                   {renderChatInputZone('mt-0 px-0 pb-0 @xs/panel:px-0')}
+                  {(inputValue ?? '').trim().length === 0 ? (
+                    <EmptyStateSuggestions
+                      disabled={isInputDisabled || disableSend || connectionUnavailable}
+                      onSelect={(prompt) => {
+                        onInputChange?.(prompt)
+                        // Let the controlled value propagate to the composer, then focus.
+                        requestAnimationFrame(() => textareaRef.current?.focus())
+                      }}
+                    />
+                  ) : null}
                 </motion.div>
               </div>
             ) : null}
