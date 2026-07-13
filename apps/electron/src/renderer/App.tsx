@@ -12,6 +12,7 @@ import { generateMessageId } from '../shared/types'
 import { useEventProcessor } from './event-processor'
 import type { AgentEvent, Effect } from './event-processor'
 import { AppShell } from '@/components/app-shell/AppShell'
+import { FilePreviewPanel } from '@/components/app-shell/FilePreviewPanel'
 import type { AppShellContextType } from '@/context/AppShellContext'
 import { OnboardingWizard, ReauthScreen } from '@/components/onboarding'
 import { WorkspacePicker } from '@/components/workspace'
@@ -2516,21 +2517,40 @@ export default function App() {
                 onRetry={handleReconnectTransport}
               />
             )}
-            <div className="flex-1 min-h-0">
-              {sessionLoadError ? (
-                <SessionLoadErrorScreen
-                  message={sessionLoadError}
-                  onRetry={() => { void loadSessionsFromServer() }}
-                />
-              ) : (
-                <AppShell
-                  contextValue={appShellContextValue}
-                  defaultLayout={[20, 32, 48]}
-                  menuNewChatTrigger={menuNewChatTrigger}
-                  isFocusedMode={isFocusedMode}
-                  isSessionListLoading={isActiveSessionListLoading}
-                  onProjectSessionSnapshotsReadyChange={setProjectSessionSnapshotsReady}
-                />
+            {/* Main content + docked file preview live side-by-side so opening a file keeps
+                the conversation and file tree visible (VS Code / Cursor style split layout). */}
+            <div className="flex-1 min-h-0 flex flex-row">
+              <div className="flex-1 min-w-0 h-full">
+                {sessionLoadError ? (
+                  <SessionLoadErrorScreen
+                    message={sessionLoadError}
+                    onRetry={() => { void loadSessionsFromServer() }}
+                  />
+                ) : (
+                  <AppShell
+                    contextValue={appShellContextValue}
+                    defaultLayout={[20, 32, 48]}
+                    menuNewChatTrigger={menuNewChatTrigger}
+                    isFocusedMode={isFocusedMode}
+                    isSessionListLoading={isActiveSessionListLoading}
+                    onProjectSessionSnapshotsReadyChange={setProjectSessionSnapshotsReady}
+                  />
+                )}
+              </div>
+
+              {/* File preview side panel — opened by the link interceptor when a previewable
+                  file is clicked. Rendered as a resizable docked panel rather than fullscreen. */}
+              {linkInterceptor.previewState && (
+                <FilePreviewPanel>
+                  <FilePreviewRenderer
+                    state={linkInterceptor.previewState}
+                    onClose={linkInterceptor.closePreview}
+                    loadDataUrl={linkInterceptor.readFileDataUrl}
+                    loadPdfData={linkInterceptor.readFileBinary}
+                    isDark={isDark}
+                    embedded
+                  />
+                </FilePreviewPanel>
               )}
             </div>
             <ResetConfirmationDialog
@@ -2539,17 +2559,6 @@ export default function App() {
               onCancel={() => setShowResetDialog(false)}
             />
           </div>
-
-          {/* File preview overlay — rendered by the link interceptor when a previewable file is clicked */}
-          {linkInterceptor.previewState && (
-            <FilePreviewRenderer
-              state={linkInterceptor.previewState}
-              onClose={linkInterceptor.closePreview}
-              loadDataUrl={linkInterceptor.readFileDataUrl}
-              loadPdfData={linkInterceptor.readFileBinary}
-              isDark={isDark}
-            />
-          )}
         </NavigationProvider>
         </TooltipProvider>
         </ModalProvider>
@@ -2589,12 +2598,15 @@ function FilePreviewRenderer({
   loadDataUrl,
   loadPdfData,
   isDark,
+  embedded = false,
 }: {
   state: FilePreviewState
   onClose: () => void
   loadDataUrl: (path: string) => Promise<string>
   loadPdfData: (path: string) => Promise<Uint8Array>
   isDark: boolean
+  /** Render inside the docked side panel instead of a fullscreen overlay */
+  embedded?: boolean
 }) {
   const theme = isDark ? 'dark' : 'light' as const
 
@@ -2607,6 +2619,7 @@ function FilePreviewRenderer({
           filePath={state.filePath}
           loadDataUrl={loadDataUrl}
           theme={theme}
+          embedded={embedded}
         />
       )
 
@@ -2618,6 +2631,7 @@ function FilePreviewRenderer({
           filePath={state.filePath}
           loadPdfData={loadPdfData}
           theme={theme}
+          embedded={embedded}
         />
       )
 
@@ -2633,6 +2647,7 @@ function FilePreviewRenderer({
           mode="read"
           theme={theme}
           error={state.error}
+          embedded={embedded}
         />
       )
 
@@ -2648,6 +2663,7 @@ function FilePreviewRenderer({
           content={state.content ?? ''}
           filePath={state.filePath}
           variant={isPlanFile ? 'plan' : 'response'}
+          embedded={embedded}
         />
       )
     }
@@ -2670,6 +2686,7 @@ function FilePreviewRenderer({
             mode="read"
             theme={theme}
             error={state.error}
+            embedded={embedded}
           />
         )
       }
@@ -2685,6 +2702,7 @@ function FilePreviewRenderer({
             mode="read"
             theme={theme}
             error={state.error}
+            embedded={embedded}
           />
         )
       }
@@ -2697,6 +2715,7 @@ function FilePreviewRenderer({
           data={parsedData}
           theme={theme}
           error={state.error}
+          embedded={embedded}
         />
       )
     }
