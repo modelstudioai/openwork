@@ -12,7 +12,7 @@
 import { Glob } from 'bun';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import { launchApp, type LaunchedApp } from './app';
+import { launchApp, type LaunchedApp, type ProfileDirs } from './app';
 
 const ROOT_DIR = join(import.meta.dir, '..');
 const ASSERTIONS_DIR = join(import.meta.dir, 'assertions');
@@ -22,6 +22,12 @@ const SCREENSHOT_DIR = join(ROOT_DIR, '.e2e/screenshots');
 export interface Assertion {
   /** Human-readable description, shown in the report. */
   name: string;
+  /**
+   * Optional: pre-seed on-disk state before the app launches (e.g. a workspace
+   * and a session with messages). Runs after the isolated profile is created,
+   * before Electron starts. Backend-independent.
+   */
+  seed?: (dirs: ProfileDirs) => void | Promise<void>;
   /** Drive the running app and throw if the expected behavior is missing. */
   run(app: LaunchedApp): Promise<void>;
 }
@@ -60,7 +66,7 @@ async function runOne(file: string, assertion: Assertion): Promise<AssertionResu
   const start = Date.now();
   let app: LaunchedApp | undefined;
   try {
-    app = await launchApp();
+    app = await launchApp({ seed: assertion.seed });
     const capturedApp = app;
     await Promise.race([
       assertion.run(capturedApp),

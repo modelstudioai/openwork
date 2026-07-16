@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next"
 import { useEffect, useState, useMemo, useCallback } from "react"
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   CircleAlert,
+  Copy,
   ExternalLink,
   Info,
   X,
@@ -2329,6 +2331,113 @@ function ErrorMessage({ message, onOpenUrl, sessionId, onRetry }: { message: Mes
   )
 }
 
+/**
+ * AssistantMessage - Separate component for assistant/agent responses so it can
+ * own the copy-button's `copied` state (a hook can't live in the role-switch of
+ * MessageBubble). Renders the markdown bubble plus hover actions: copy the
+ * response as Markdown (parity with Claude/ChatGPT/Codex desktop, which all
+ * offer a per-message copy) and the existing pop-out control.
+ */
+function AssistantMessage({
+  message,
+  renderMode,
+  onOpenUrl,
+  onOpenFile,
+  onPopOut,
+}: {
+  message: Message
+  renderMode: RenderMode
+  onOpenUrl?: (url: string) => void
+  onOpenFile?: (path: string) => void
+  onPopOut?: (message: Message) => void
+}) {
+  const { t } = useTranslation()
+  const [copied, setCopied] = React.useState(false)
+  const copyResetRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  React.useEffect(() => {
+    return () => {
+      if (copyResetRef.current) clearTimeout(copyResetRef.current)
+    }
+  }, [])
+
+  const handleCopy = React.useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(message.content)
+      setCopied(true)
+      if (copyResetRef.current) clearTimeout(copyResetRef.current)
+      copyResetRef.current = setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('[ChatDisplay] Failed to copy assistant message:', error)
+      toast.error(t('toast.copyFailed'))
+    }
+  }, [message.content, t])
+
+  // Copy/pop-out only make sense on a settled (non-streaming) response.
+  const showActions = !message.isStreaming
+
+  return (
+    <div className="flex justify-start group">
+      <div className="relative max-w-[90%] bg-background shadow-minimal rounded-[8px] pl-6 pr-4 py-3 break-words min-w-0 select-text">
+        {showActions && (
+          <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Copy response as Markdown */}
+            <button
+              type="button"
+              onClick={handleCopy}
+              data-testid="assistant-copy"
+              data-copied={copied ? 'true' : 'false'}
+              className="p-1.5 rounded-md hover:bg-foreground/5"
+              aria-label={copied ? t('common.copied') : t('common.copy')}
+              title={copied ? t('common.copied') : t('common.copy')}
+            >
+              {copied ? (
+                <Check className="w-4 h-4 text-success" />
+              ) : (
+                <Copy className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+              )}
+            </button>
+            {/* Pop-out button */}
+            {onPopOut && (
+              <button
+                type="button"
+                onClick={() => onPopOut(message)}
+                className="p-1.5 rounded-md hover:bg-foreground/5"
+                title={t("sidebarMenu.openInNewWindow")}
+              >
+                <ExternalLink className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+        )}
+        {/* Use StreamingMarkdown for block-level memoization during streaming */}
+        {message.isStreaming ? (
+          <StreamingMarkdown
+            content={message.content}
+            isStreaming={true}
+            mode={renderMode}
+            onUrlClick={onOpenUrl}
+            onFileClick={onOpenFile}
+          />
+        ) : (
+          <CollapsibleMarkdownProvider>
+            <Markdown
+              mode={renderMode}
+              onUrlClick={onOpenUrl}
+              onFileClick={onOpenFile}
+              id={message.id}
+              className="text-sm"
+              collapsible
+            >
+              {message.content}
+            </Markdown>
+          </CollapsibleMarkdownProvider>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function MessageBubble({
   message,
   onOpenFile,
@@ -2367,43 +2476,13 @@ function MessageBubble({
   // === ASSISTANT MESSAGE: Left-aligned gray bubble with markdown rendering ===
   if (message.role === 'assistant') {
     return (
-      <div className="flex justify-start group">
-        <div className="relative max-w-[90%] bg-background shadow-minimal rounded-[8px] pl-6 pr-4 py-3 break-words min-w-0 select-text">
-          {/* Pop-out button - visible on hover */}
-          {onPopOut && !message.isStreaming && (
-            <button
-              onClick={() => onPopOut(message)}
-              className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-foreground/5"
-              title={t("sidebarMenu.openInNewWindow")}
-            >
-              <ExternalLink className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-            </button>
-          )}
-          {/* Use StreamingMarkdown for block-level memoization during streaming */}
-          {message.isStreaming ? (
-            <StreamingMarkdown
-              content={message.content}
-              isStreaming={true}
-              mode={renderMode}
-              onUrlClick={onOpenUrl}
-              onFileClick={onOpenFile}
-            />
-          ) : (
-            <CollapsibleMarkdownProvider>
-              <Markdown
-                mode={renderMode}
-                onUrlClick={onOpenUrl}
-                onFileClick={onOpenFile}
-                id={message.id}
-                className="text-sm"
-                collapsible
-              >
-                {message.content}
-              </Markdown>
-            </CollapsibleMarkdownProvider>
-          )}
-        </div>
-      </div>
+      <AssistantMessage
+        message={message}
+        renderMode={renderMode}
+        onOpenUrl={onOpenUrl}
+        onOpenFile={onOpenFile}
+        onPopOut={onPopOut}
+      />
     )
   }
 

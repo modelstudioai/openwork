@@ -22,6 +22,16 @@ const E2E_DIR = join(ROOT_DIR, '.e2e');
 const MAIN_BUNDLE = join(ELECTRON_DIR, 'dist/main.cjs');
 const RENDERER_HTML = join(ELECTRON_DIR, 'dist/renderer/index.html');
 
+/** The isolated per-launch profile directories, handed to a {@link LaunchOptions.seed} hook. */
+export interface ProfileDirs {
+  /** Electron userData (cache, cookies, local storage, single-instance lock). */
+  userDataDir: string;
+  /** App config + workspace registry (CRAFT_CONFIG_DIR / ~/.craft-agent). */
+  configDir: string;
+  /** Root of the default conversation workspace (QWEN_DEFAULT_WORKSPACE_DIR). */
+  workspaceDir: string;
+}
+
 export interface LaunchOptions {
   /** Override the remote-debugging port (default: an ephemeral free port). */
   port?: number;
@@ -29,6 +39,12 @@ export interface LaunchOptions {
   rebuild?: boolean;
   /** Milliseconds to wait for the main renderer target to appear. */
   startupTimeoutMs?: number;
+  /**
+   * Runs after the isolated profile dirs are created but BEFORE Electron starts,
+   * so an assertion can pre-seed on-disk state (e.g. a workspace + a session
+   * with messages) that the app will load on launch. Backend-independent.
+   */
+  seed?: (dirs: ProfileDirs) => void | Promise<void>;
 }
 
 export interface LaunchedApp {
@@ -133,6 +149,11 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   mkdirSync(userDataDir, { recursive: true });
   mkdirSync(configDir, { recursive: true });
   mkdirSync(workspaceDir, { recursive: true });
+
+  // Pre-seed on-disk state (workspaces/sessions) before the app boots.
+  if (options.seed) {
+    await options.seed({ userDataDir, configDir, workspaceDir });
+  }
 
   const electronArgs = [
     'apps/electron',
