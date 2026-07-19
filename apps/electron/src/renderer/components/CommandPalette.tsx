@@ -34,11 +34,13 @@ import { useRegisterModal } from '@/context/ModalContext'
 import {
   useAction,
   useActionRegistry,
+  actions as actionDefinitions,
   actionsByCategory,
   ACTION_LABEL_KEYS,
   categoryLabelKey,
   type ActionId,
 } from '@/actions'
+import { readRecents, recordRecent } from './command-palette-recents'
 
 // Actions that should not appear as palette entries:
 //  - the palette's own open action (running it from inside the palette is a no-op)
@@ -54,13 +56,34 @@ export function CommandPalette() {
   const { t } = useTranslation()
   const { execute, canExecute, getHotkeyDisplay } = useActionRegistry()
   const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
 
   // ⌘K / Ctrl+K toggles the palette.
   useAction('app.commandPalette', () => setOpen(prev => !prev))
 
+  // Reset the query each time the palette opens so it always starts fresh
+  // (and the "Recently used" group — shown only for an empty query — is visible).
+  const handleOpenChange = useCallback((next: boolean) => {
+    if (next) setSearch('')
+    setOpen(next)
+  }, [])
+
   // Participate in the layered modal stack (Cmd+W / X close the topmost modal).
   const handleClose = useCallback(() => setOpen(false), [])
   useRegisterModal(open, handleClose)
+
+  // Turn a runnable action id into a display-ready palette entry.
+  const toItem = useCallback(
+    (id: ActionId) => {
+      const labelKey = ACTION_LABEL_KEYS[id]
+      return {
+        id,
+        label: labelKey ? t(labelKey) : actionDefinitions[id].label,
+        hotkey: getHotkeyDisplay(id),
+      }
+    },
+    [t, getHotkeyDisplay],
+  )
 
   // Build the grouped, display-ready action list once.
   const groups = useMemo(() => {
@@ -75,23 +98,31 @@ export function CommandPalette() {
           // is disabled, so the palette never shows a dead entry. Evaluated as
           // the palette opens, i.e. against the focus you're returning to.
           .filter(action => canExecute(action.id as ActionId))
-          .map(action => {
-            const id = action.id as ActionId
-            const labelKey = ACTION_LABEL_KEYS[id]
-            return {
-              id,
-              label: labelKey ? t(labelKey) : action.label,
-              hotkey: getHotkeyDisplay(id),
-            }
-          }),
+          .map(action => toItem(action.id as ActionId)),
       }))
       .filter(group => group.items.length > 0)
     // getHotkeyDisplay / t are stable enough for a menu; recompute on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
+  // "Recently used": the most-recently-run actions, newest first. Kept to
+  // entries that still exist, aren't excluded from the palette, and can run
+  // right now — so the group never surfaces a stale or dead command. Only
+  // shown for an empty query (a search should rank by relevance, not recency).
+  const recentItems = useMemo(() => {
+    return readRecents()
+      .filter((id): id is ActionId => id in actionDefinitions)
+      .filter(id => !EXCLUDED_ACTIONS.has(id))
+      .filter(id => canExecute(id))
+      .map(id => toItem(id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+  const showRecent = search.trim() === '' && recentItems.length > 0
+
   const runAction = useCallback(
     (id: ActionId) => {
+      // Remember this action so it surfaces in "Recently used" next time.
+      recordRecent(id)
       // Close first, then run on the next tick. Closing the dialog restores
       // focus to the element that was active before the palette opened, so the
       // action runs in the app's real focus context — actions that open a panel
@@ -104,7 +135,7 @@ export function CommandPalette() {
   )
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
         className="overflow-hidden p-0"
@@ -121,11 +152,30 @@ export function CommandPalette() {
           <CommandInput
             data-testid="command-palette-input"
             placeholder={t('commands.searchCommands')}
+            value={search}
+            onValueChange={setSearch}
           />
           <CommandList>
             <CommandEmpty data-testid="command-palette-empty">
               {t('common.noResultsFound')}
             </CommandEmpty>
+            {showRecent && (
+              <CommandGroup heading={t('commands.recent')}>
+                {recentItems.map(item => (
+                  <CommandItem
+                    key={`recent:${item.id}`}
+                    value={`recent ${item.label} ${item.id}`}
+                    data-testid="command-palette-recent-item"
+                    onSelect={() => runAction(item.id)}
+                  >
+                    <span>{item.label}</span>
+                    {item.hotkey && (
+                      <CommandShortcut>{item.hotkey}</CommandShortcut>
+                    )}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
             {groups.map(group => (
               <CommandGroup key={group.category} heading={group.heading}>
                 {group.items.map(item => (
