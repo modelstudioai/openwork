@@ -28,7 +28,12 @@ export interface SettingsSegmentedControlProps<T extends string = string> {
   size?: 'sm' | 'md'
   /** Additional className */
   className?: string
-  /** Optional test id — applied to the group and, suffixed with `-<value>`, to each option */
+  /**
+   * Optional test id. When set, `data-testid` is applied to the group and,
+   * suffixed with `-<value>`, to each option. Every option button also
+   * carries a `data-value` attribute, so tests can address a specific
+   * segment without depending on its (localized) label.
+   */
   testId?: string
 }
 

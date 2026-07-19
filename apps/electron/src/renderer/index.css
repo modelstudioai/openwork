@@ -1386,3 +1386,23 @@ html.dark[data-scenic] .fullscreen-overlay-background {
   transition-delay: 0ms !important;
   scroll-behavior: auto !important;
 }
+
+/* Chat text size: the "Chat text size" control in Appearance settings reflects
+   its choice onto <html> as data-chat-text-size. That maps to the
+   --chat-font-scale custom property, which the chat transcript container
+   (.chat-text-scope) consumes as `font-size: calc(1em * var(--chat-font-scale))`.
+   Being em-relative keeps the default (medium) exactly neutral and scales only
+   the conversation's reading text — the sidebar, top bar, composer, and icons
+   keep their native size. */
+:root {
+  --chat-font-scale: 1;
+}
+[data-chat-text-size='small'] {
+  --chat-font-scale: 0.9;
+}
+[data-chat-text-size='large'] {
+  --chat-font-scale: 1.15;
+}
+.chat-text-scope {
+  font-size: calc(1em * var(--chat-font-scale));
+}

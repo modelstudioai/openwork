@@ -8,6 +8,7 @@ import App from './App'
 import { ThemeProvider } from './context/ThemeContext'
 import { ReduceMotionProvider } from './context/ReduceMotionContext'
 import { ConversationWidthProvider } from './context/ConversationWidthContext'
+import { ChatTextSizeProvider } from './context/ChatTextSizeContext'
 import { windowWorkspaceIdAtom } from './atoms/sessions'
 import { Toaster } from '@/components/ui/sonner'
 import { PetWindowController } from '@/components/pet/PetWindowController'
@@ -110,9 +111,11 @@ function Root() {
     <ThemeProvider activeWorkspaceId={workspaceId}>
       <ReduceMotionProvider>
         <ConversationWidthProvider>
-          <App />
-          <Toaster />
-          <PetWindowController />
+          <ChatTextSizeProvider>
+            <App />
+            <Toaster />
+            <PetWindowController />
+          </ChatTextSizeProvider>
         </ConversationWidthProvider>
       </ReduceMotionProvider>
     </ThemeProvider>
