@@ -18,6 +18,7 @@ import { OnboardingWizard, ReauthScreen } from '@/components/onboarding'
 import { WorkspacePicker } from '@/components/workspace'
 import { ResetConfirmationDialog } from '@/components/ResetConfirmationDialog'
 import { CommandPalette } from '@/components/CommandPalette'
+import { ZoomHotkeys } from '@/components/ZoomHotkeys'
 import { SplashScreen } from '@/components/SplashScreen'
 import { TooltipProvider } from '@craft-agent/ui'
 import { FocusProvider } from '@/context/FocusContext'
@@ -2500,6 +2501,9 @@ export default function App() {
 
           {/* Global command palette (⌘K / Ctrl+K) — search and run any action */}
           <CommandPalette />
+
+          {/* Interface zoom shortcuts (⌘+ / ⌘- / ⌘0) wired to the action registry */}
+          <ZoomHotkeys />
 
           {/* Splash screen overlay - fades out when fully ready */}
           {showSplash && (

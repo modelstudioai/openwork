@@ -143,6 +143,27 @@ export const actions = {
     defaultHotkey: 'mod+.',
     category: 'View',
   },
+  'view.zoomIn': {
+    id: 'view.zoomIn',
+    label: 'Zoom In',
+    description: 'Scale the whole interface up',
+    defaultHotkey: 'mod+=',
+    category: 'View',
+  },
+  'view.zoomOut': {
+    id: 'view.zoomOut',
+    label: 'Zoom Out',
+    description: 'Scale the whole interface down',
+    defaultHotkey: 'mod+-',
+    category: 'View',
+  },
+  'view.zoomReset': {
+    id: 'view.zoomReset',
+    label: 'Reset Zoom',
+    description: 'Reset the interface zoom to 100%',
+    defaultHotkey: 'mod+0',
+    category: 'View',
+  },
 
   // ═══════════════════════════════════════════
   // Navigator (scoped — active entity list in middle panel)

@@ -10,6 +10,7 @@ import { ReduceMotionProvider } from './context/ReduceMotionContext'
 import { ConversationWidthProvider } from './context/ConversationWidthContext'
 import { ChatTextSizeProvider } from './context/ChatTextSizeContext'
 import { HighContrastProvider } from './context/HighContrastContext'
+import { ZoomProvider } from './context/ZoomContext'
 import { windowWorkspaceIdAtom } from './atoms/sessions'
 import { Toaster } from '@/components/ui/sonner'
 import { PetWindowController } from '@/components/pet/PetWindowController'
@@ -114,9 +115,11 @@ function Root() {
         <ConversationWidthProvider>
           <ChatTextSizeProvider>
             <HighContrastProvider>
-              <App />
-              <Toaster />
-              <PetWindowController />
+              <ZoomProvider>
+                <App />
+                <Toaster />
+                <PetWindowController />
+              </ZoomProvider>
             </HighContrastProvider>
           </ChatTextSizeProvider>
         </ConversationWidthProvider>
