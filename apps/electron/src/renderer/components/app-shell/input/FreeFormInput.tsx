@@ -107,6 +107,13 @@ import {
   addRecentWorkingDir,
   removeRecentWorkingDir,
 } from './working-directory-history';
+import {
+  getPromptHistory,
+  recordPrompt,
+  prevPromptIndex,
+  nextPromptIndex,
+  promptAt,
+} from './prompt-history';
 import { CompactPermissionModeSelector } from './CompactPermissionModeSelector';
 import { FEATURE_FLAGS } from '@craft-agent/shared/feature-flags';
 import { inferFileAttachmentMetadata } from './file-attachment-metadata';
@@ -943,6 +950,33 @@ export function FreeFormInput({
   // Merge refs for RichTextInput
   const internalInputRef = React.useRef<RichTextInputHandle>(null);
   const richInputRef = externalInputRef || internalInputRef;
+
+  // Prompt history recall (Up/Down arrows walk previously-sent prompts, shell-style).
+  // `promptHistoryIndexRef` is null when not recalling, otherwise the index into
+  // `promptHistoryRef` currently shown in the composer; `draftBeforeHistoryRef`
+  // holds the draft the user started from so Down can restore it.
+  const promptHistoryRef = React.useRef<string[]>([]);
+  const promptHistoryIndexRef = React.useRef<number | null>(null);
+  const draftBeforeHistoryRef = React.useRef<string>('');
+
+  // Replace the composer contents programmatically (used by history recall):
+  // drive the controlled `value` prop and place the caret at the end.
+  const applyRecalledPrompt = React.useCallback(
+    (text: string) => {
+      setInput(text);
+      syncToParent(text);
+      requestAnimationFrame(() => {
+        richInputRef.current?.setSelectionRange(text.length, text.length);
+      });
+    },
+    [syncToParent, richInputRef],
+  );
+
+  // Reset prompt-history recall when switching sessions.
+  React.useEffect(() => {
+    promptHistoryIndexRef.current = null;
+    draftBeforeHistoryRef.current = '';
+  }, [sessionId]);
 
   // Track last caret position for focus restoration (e.g., after permission mode popover closes)
   const lastCaretPositionRef = React.useRef<number | null>(null);
@@ -1844,6 +1878,10 @@ export function FreeFormInput({
       attachments.length > 0 ? attachments : undefined,
       mentions.skills.length > 0 ? mentions.skills : undefined,
     );
+    // Record the sent prompt for Up/Down recall, and exit any recall mode.
+    promptHistoryRef.current = recordPrompt(input);
+    promptHistoryIndexRef.current = null;
+    draftBeforeHistoryRef.current = '';
     setInput('');
     setAttachments([]);
     // Clear draft immediately (cancel any pending debounced sync)
@@ -1971,6 +2009,55 @@ export function FreeFormInput({
       }
     }
 
+    // Prompt history recall: Up/Down walk previously-sent prompts, shell-style.
+    // Only when no menu is open and no modifier/IME is active. Up engages when the
+    // composer is empty (or already recalling); Down only steps while recalling, so
+    // ordinary caret movement in a draft is untouched.
+    if (
+      (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey &&
+      !e.shiftKey &&
+      !e.nativeEvent.isComposing &&
+      !inlineMention.isOpen &&
+      !inlineSlash.isOpen &&
+      !inlineLabel.isOpen
+    ) {
+      const recalling = promptHistoryIndexRef.current !== null;
+      if (e.key === 'ArrowUp') {
+        const currentValue = richInputRef.current?.value ?? '';
+        if (recalling || currentValue.trim() === '') {
+          if (!recalling) {
+            // Refresh history from storage and remember the draft to restore.
+            promptHistoryRef.current = getPromptHistory();
+            draftBeforeHistoryRef.current = currentValue;
+          }
+          const history = promptHistoryRef.current;
+          const nextIndex = prevPromptIndex(history, promptHistoryIndexRef.current);
+          const entry = promptAt(history, nextIndex);
+          if (entry !== null) {
+            e.preventDefault();
+            promptHistoryIndexRef.current = nextIndex;
+            applyRecalledPrompt(entry);
+            return;
+          }
+        }
+      } else if (recalling) {
+        // ArrowDown while recalling: step toward newer, restoring the draft past the end.
+        e.preventDefault();
+        const history = promptHistoryRef.current;
+        const nextIndex = nextPromptIndex(history, promptHistoryIndexRef.current);
+        promptHistoryIndexRef.current = nextIndex;
+        applyRecalledPrompt(
+          nextIndex === null
+            ? draftBeforeHistoryRef.current
+            : promptAt(history, nextIndex) ?? '',
+        );
+        return;
+      }
+    }
+
     if (
       e.key === 'Tab' &&
       e.shiftKey &&
@@ -2041,6 +2128,11 @@ export function FreeFormInput({
       const nextValue = coerceInputText(value);
       // Get previous input value before updating state
       const prevValue = inputRef.current;
+
+      // A real edit exits prompt-history recall mode. Programmatic recall updates
+      // the controlled `value` prop directly (not via this onChange), so this only
+      // fires for genuine user typing/editing.
+      promptHistoryIndexRef.current = null;
 
       setInput(nextValue);
       syncToParent(nextValue); // Debounced sync to parent for draft persistence
@@ -2494,6 +2586,7 @@ export function FreeFormInput({
         {!(compactMode && isProcessing) && (
           <RichTextInput
             ref={richInputRef}
+            data-testid="composer-input"
             value={input}
             onChange={handleInputChange}
             onInput={handleRichInput}
