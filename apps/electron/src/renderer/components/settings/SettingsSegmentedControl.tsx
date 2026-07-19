@@ -28,6 +28,8 @@ export interface SettingsSegmentedControlProps<T extends string = string> {
   size?: 'sm' | 'md'
   /** Additional className */
   className?: string
+  /** Optional test id — applied to the group and, suffixed with `-<value>`, to each option */
+  testId?: string
 }
 
 /**
@@ -50,10 +52,12 @@ export function SettingsSegmentedControl<T extends string = string>({
   options,
   size = 'md',
   className,
+  testId,
 }: SettingsSegmentedControlProps<T>) {
   return (
     <div
       role="radiogroup"
+      data-testid={testId}
       className={cn('inline-flex gap-1', className)}
     >
       {options.map((option) => {
@@ -65,6 +69,8 @@ export function SettingsSegmentedControl<T extends string = string>({
             type="button"
             role="radio"
             aria-checked={isSelected}
+            data-testid={testId ? `${testId}-${option.value}` : undefined}
+            data-value={option.value}
             onClick={() => onValueChange(option.value)}
             className={cn(
               'flex items-center gap-1.5 rounded-lg transition-all',

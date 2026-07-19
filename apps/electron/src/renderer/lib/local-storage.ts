@@ -62,6 +62,7 @@ export const KEYS = {
   // Appearance
   showConnectionIcons: 'show-connection-icons',
   reduceMotion: 'reduce-motion', // Minimize animations/transitions app-wide
+  conversationWidth: 'conversation-width', // Chat reading-column width: comfortable | wide | full
 
   // What's New
   whatsNewLastSeenVersion: 'whats-new-last-seen-version',

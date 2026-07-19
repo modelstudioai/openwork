@@ -15,6 +15,7 @@ import { HeaderMenu } from '@/components/ui/HeaderMenu'
 import { EditPopover, EditButton, getEditConfig } from '@/components/ui/EditPopover'
 import { useTheme } from '@/context/ThemeContext'
 import { useReduceMotion } from '@/context/ReduceMotionContext'
+import { useConversationWidth } from '@/context/ConversationWidthContext'
 import { useAppShellContext } from '@/context/AppShellContext'
 import { routes } from '@/lib/navigate'
 import { FolderOpen, Monitor, RefreshCw, Sun, Moon } from 'lucide-react'
@@ -142,6 +143,9 @@ export default function AppearanceSettingsPage() {
 
   // Reduce motion toggle (renderer-only preference, persisted in localStorage)
   const { reduceMotion, setReduceMotion } = useReduceMotion()
+
+  // Conversation width (renderer-only preference, persisted in localStorage)
+  const { conversationWidth, setConversationWidth } = useConversationWidth()
 
   // Pet companion settings + custom pets (synced via shared Jotai atoms)
   const {
@@ -387,6 +391,21 @@ export default function AppearanceSettingsPage() {
                     onCheckedChange={setReduceMotion}
                     testId="reduce-motion-toggle"
                   />
+                  <SettingsRow
+                    label={t("settings.appearance.conversationWidth")}
+                    description={t("settings.appearance.conversationWidthDesc")}
+                  >
+                    <SettingsSegmentedControl
+                      value={conversationWidth}
+                      onValueChange={setConversationWidth}
+                      testId="conversation-width-control"
+                      options={[
+                        { value: 'comfortable', label: t("settings.appearance.conversationWidthComfortable") },
+                        { value: 'wide', label: t("settings.appearance.conversationWidthWide") },
+                        { value: 'full', label: t("settings.appearance.conversationWidthFull") },
+                      ]}
+                    />
+                  </SettingsRow>
                 </SettingsCard>
               </SettingsSection>
 
