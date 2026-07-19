@@ -796,6 +796,8 @@
   "settings.appearance.conversationWidthDesc": "Beállítja a csevegés és a szerkesztő szélességét.",
   "settings.appearance.conversationWidthFull": "Teljes",
   "settings.appearance.conversationWidthWide": "Széles",
+  "settings.appearance.increaseContrast": "Kontraszt növelése",
+  "settings.appearance.increaseContrastDesc": "A szegélyek, elválasztók és másodlagos szöveg erősítése a jobb olvashatóságért.",
   "settings.appearance.pet": "Kabala",
   "settings.appearance.petCustom": "Egyéni kabalák",
   "settings.appearance.petCustomHint": "Adj hozzá egy mappát pet.json fájllal és 8x9-es spritesheettel, majd frissíts.",

@@ -796,6 +796,8 @@
   "settings.appearance.conversationWidthDesc": "Legt fest, wie breit der Chatverlauf und das Eingabefeld sind.",
   "settings.appearance.conversationWidthFull": "Voll",
   "settings.appearance.conversationWidthWide": "Breit",
+  "settings.appearance.increaseContrast": "Kontrast erhöhen",
+  "settings.appearance.increaseContrastDesc": "Ränder, Trennlinien und sekundären Text für bessere Lesbarkeit verstärken.",
   "settings.appearance.pet": "Begleiter",
   "settings.appearance.petCustom": "Eigene Begleiter",
   "settings.appearance.petCustomHint": "Füge einen Ordner mit pet.json und einem 8x9-Spritesheet hinzu und aktualisiere dann.",

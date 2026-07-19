@@ -796,6 +796,8 @@
   "settings.appearance.conversationWidthDesc": "チャット履歴と入力欄の表示幅を設定します。",
   "settings.appearance.conversationWidthFull": "全幅",
   "settings.appearance.conversationWidthWide": "ワイド",
+  "settings.appearance.increaseContrast": "コントラストを上げる",
+  "settings.appearance.increaseContrastDesc": "境界線・区切り線・補助テキストを強調して読みやすくします。",
   "settings.appearance.pet": "ペット",
   "settings.appearance.petCustom": "カスタムペット",
   "settings.appearance.petCustomHint": "pet.json と 8x9 のスプライトシートを含むフォルダーを追加してから更新します。",

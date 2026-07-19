@@ -796,6 +796,8 @@
   "settings.appearance.conversationWidthDesc": "Określa szerokość transkrypcji czatu i pola tekstowego.",
   "settings.appearance.conversationWidthFull": "Pełna",
   "settings.appearance.conversationWidthWide": "Szeroka",
+  "settings.appearance.increaseContrast": "Zwiększ kontrast",
+  "settings.appearance.increaseContrastDesc": "Wzmocnij obramowania, separatory i tekst pomocniczy dla lepszej czytelności.",
   "settings.appearance.pet": "Maskotka",
   "settings.appearance.petCustom": "Własne maskotki",
   "settings.appearance.petCustomHint": "Dodaj folder z pet.json i arkuszem sprite'ów 8x9, a potem odśwież.",

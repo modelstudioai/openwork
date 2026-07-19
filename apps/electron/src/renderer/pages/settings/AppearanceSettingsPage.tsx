@@ -17,6 +17,7 @@ import { useTheme } from '@/context/ThemeContext'
 import { useReduceMotion } from '@/context/ReduceMotionContext'
 import { useConversationWidth } from '@/context/ConversationWidthContext'
 import { useChatTextSize, type ChatTextSize } from '@/context/ChatTextSizeContext'
+import { useHighContrast } from '@/context/HighContrastContext'
 import { useAppShellContext } from '@/context/AppShellContext'
 import { routes } from '@/lib/navigate'
 import { FolderOpen, Monitor, RefreshCw, Sun, Moon } from 'lucide-react'
@@ -149,6 +150,8 @@ export default function AppearanceSettingsPage() {
   const { conversationWidth, setConversationWidth } = useConversationWidth()
   // Chat text size (renderer-only preference, persisted in localStorage)
   const { chatTextSize, setChatTextSize } = useChatTextSize()
+  // Increase contrast toggle (renderer-only preference, persisted in localStorage)
+  const { highContrast, setHighContrast } = useHighContrast()
 
   // Pet companion settings + custom pets (synced via shared Jotai atoms)
   const {
@@ -424,6 +427,13 @@ export default function AppearanceSettingsPage() {
                       ]}
                     />
                   </SettingsRow>
+                  <SettingsToggle
+                    label={t("settings.appearance.increaseContrast")}
+                    description={t("settings.appearance.increaseContrastDesc")}
+                    checked={highContrast}
+                    onCheckedChange={setHighContrast}
+                    testId="high-contrast-toggle"
+                  />
                 </SettingsCard>
               </SettingsSection>
 

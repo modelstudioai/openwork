@@ -796,6 +796,8 @@
   "settings.appearance.conversationWidthDesc": "Define el ancho de la transcripción del chat y del compositor.",
   "settings.appearance.conversationWidthFull": "Completo",
   "settings.appearance.conversationWidthWide": "Ancho",
+  "settings.appearance.increaseContrast": "Aumentar contraste",
+  "settings.appearance.increaseContrastDesc": "Refuerza los bordes, separadores y el texto secundario para mejorar la legibilidad.",
   "settings.appearance.pet": "Mascota",
   "settings.appearance.petCustom": "Mascotas personalizadas",
   "settings.appearance.petCustomHint": "Añade una carpeta con pet.json y un spritesheet de 8x9, luego actualiza.",
