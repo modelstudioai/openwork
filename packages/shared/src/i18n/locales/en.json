@@ -217,6 +217,7 @@
   "chat.processing.zipping": "Zipping...",
   "chat.processing.zooming": "Zooming...",
   "chat.renameSession": "Rename Session",
+  "chat.scrollToBottom": "Scroll to bottom",
   "chat.scrollUpForEarlier": "Scroll up for earlier messages ({{count}} more)",
   "chat.selectedText": "Selected text",
   "chat.session": "Session",
