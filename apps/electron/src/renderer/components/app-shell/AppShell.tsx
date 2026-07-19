@@ -222,6 +222,7 @@ import { hasOpenOverlay } from '@/lib/overlay-detection'
 import { getNextPermissionMode } from '@/lib/permission-mode-cycle'
 import { clearSourceIconCaches } from '@/lib/icon-cache'
 import { dispatchFocusInputEvent } from './input/focus-input-events'
+import { dispatchOpenComposerMenuEvent } from './input/composer-menu-events'
 import { resolveEffectiveConnectionSlug } from '@config/llm-connections'
 import { getWorkspaceDisplayName } from '@/utils/workspace'
 
@@ -1819,6 +1820,12 @@ function AppShellContent({
   // History navigation (arrow key alternatives)
   useAction('nav.goBackAlt', goBack)
   useAction('nav.goForwardAlt', goForward)
+
+  // Open the composer's thinking (reasoning effort) menu (CMD+SHIFT+E).
+  // Targets the focused panel's composer via the scoped composer-menu event.
+  useAction('chat.openThinkingMenu', () =>
+    dispatchOpenComposerMenuEvent({ menu: 'thinking' }),
+  )
 
   // Search match navigation (CMD+G next, CMD+SHIFT+G prev)
   useAction(

@@ -1173,6 +1173,7 @@
   "shortcuts.action.newChatInPanel": "在面板中新建聊天",
   "shortcuts.action.newWindow": "新建窗口",
   "shortcuts.action.nextSearchMatch": "下一个搜索匹配",
+  "shortcuts.action.openThinkingMenu": "打开思考菜单",
   "shortcuts.action.prevSearchMatch": "上一个搜索匹配",
   "shortcuts.action.quit": "退出",
   "shortcuts.action.search": "搜索",
