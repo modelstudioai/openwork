@@ -93,6 +93,7 @@ function SettingsItemRow({ item, isSelected, isFirst, onSelect }: SettingsItemRo
         <button
           type="button"
           onClick={onSelect}
+          data-testid={`settings-item-${item.id}`}
           className={cn(
             'flex w-full items-start gap-2 pl-2 pr-4 py-3 text-left text-sm outline-none rounded-[8px]',
             // Fast hover transition (75ms vs default 150ms)
