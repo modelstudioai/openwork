@@ -215,6 +215,7 @@
   "chat.processing.zipping": "Gnam...",
   "chat.processing.zooming": "Pędzę...",
   "chat.renameSession": "Zmień nazwę sesji",
+  "chat.scrollToBottom": "Przewiń na dół",
   "chat.scrollUpForEarlier": "Przewiń w górę, aby zobaczyć wcześniejsze wiadomości (jeszcze {{count}})",
   "chat.selectedText": "Zaznaczony tekst",
   "chat.session": "Sesja",

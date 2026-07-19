@@ -215,6 +215,7 @@
   "chat.processing.zipping": "シュッシュッ...",
   "chat.processing.zooming": "ズーム中...",
   "chat.renameSession": "セッション名を変更",
+  "chat.scrollToBottom": "最下部へスクロール",
   "chat.scrollUpForEarlier": "上にスクロールして以前のメッセージを表示 (あと {{count}} 件)",
   "chat.selectedText": "選択テキスト",
   "chat.session": "セッション",

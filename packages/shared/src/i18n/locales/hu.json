@@ -215,6 +215,7 @@
   "chat.processing.zipping": "Száguldok...",
   "chat.processing.zooming": "Zoom...",
   "chat.renameSession": "Munkamenet átnevezése",
+  "chat.scrollToBottom": "Görgetés az aljára",
   "chat.scrollUpForEarlier": "Görgess fel a korábbi üzenetekért (még {{count}})",
   "chat.selectedText": "Kijelölt szöveg",
   "chat.session": "Munkamenet",

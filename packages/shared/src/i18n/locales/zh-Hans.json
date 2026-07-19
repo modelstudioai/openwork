@@ -215,6 +215,7 @@
   "chat.processing.zipping": "飞速中...",
   "chat.processing.zooming": "疾驰中...",
   "chat.renameSession": "重命名会话",
+  "chat.scrollToBottom": "滚动到底部",
   "chat.scrollUpForEarlier": "向上滚动查看更早的消息 (还有 {{count}} 条)",
   "chat.selectedText": "选中文本",
   "chat.session": "会话",
