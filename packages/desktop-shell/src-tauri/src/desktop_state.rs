@@ -10,7 +10,7 @@ const DEFAULT_WIDTH: u32 = 1280;
 const DEFAULT_HEIGHT: u32 = 820;
 const MIN_WIDTH: u32 = 900;
 const MIN_HEIGHT: u32 = 600;
-const DISABLE_SETTINGS_PERSISTENCE_ENV: &str = "QWEN_DESKTOP_DISABLE_SETTINGS_PERSISTENCE";
+const DISABLE_SETTINGS_PERSISTENCE_ENV: &str = "OPENWORK_DESKTOP_DISABLE_SETTINGS_PERSISTENCE";
 static NEXT_WRITE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn atomic_write_replaces_existing_contents() {
-        let root = std::env::temp_dir().join(format!("qwen-desktop-state-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("openwork-desktop-state-{}", std::process::id()));
         let path = root.join("desktop-state.json");
         write_atomic(&path, b"first").expect("first write");
         write_atomic(&path, b"second").expect("second write");

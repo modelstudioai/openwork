@@ -1,160 +1,98 @@
-<div align="center">
+# OpenWork
 
-[![npm version](https://img.shields.io/npm/v/@qwen-code/qwen-code.svg)](https://www.npmjs.com/package/@qwen-code/qwen-code)
-[![License](https://img.shields.io/github/license/QwenLM/qwen-code.svg)](./LICENSE)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
-[![Downloads](https://img.shields.io/npm/dm/@qwen-code/qwen-code.svg)](https://www.npmjs.com/package/@qwen-code/qwen-code)
+**A local-first desktop application for AI agent workflows from ModelStudio.**
 
-<a href="https://trendshift.io/repositories/15287" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15287" alt="QwenLM%2Fqwen-code | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+OpenWork lets you work with AI agents on your desktop: chat with agents, manage multiple sessions, connect local projects and external tools, preview files and execution results, and move real development tasks forward in a permission-controlled environment.
 
-**The open-source AI coding agent that lives in your terminal.**
+Built for AI agents, OpenWork brings model capabilities, tool use, local engineering context, and multi-step task workflows into one desktop workspace.
 
-<a href="https://qwenlm.github.io/qwen-code-docs/zh/users/overview">中文</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/de/users/overview">Deutsch</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/fr/users/overview">français</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/ja/users/overview">日本語</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/ru/users/overview">Русский</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/pt-BR/users/overview">Português (Brasil)</a> |
-<a href="https://qwenlm.github.io/qwen-code-docs/ko/users/overview">한국어</a>
+## Features
 
-</div>
+OpenWork gives your AI agent a ready-to-use desktop environment and lets it combine the following capabilities during complex tasks:
 
-## Why Qwen Code?
+- **Multi-session management** - Create separate sessions for different projects, tasks, or experiments, preserve context, and switch between them at any time.
+- **Local project workspaces** - Work against local codebases, filesystems, and development environments for real engineering tasks.
+- **Agent conversation interface** - View conversations, task progress, tool calls, and execution results inside the desktop app.
+- **Code execution and debugging** - Let agents read projects, run commands, analyze logs, modify code, and verify results.
+- **File and artifact previews** - Inspect code, documents, spreadsheets, command output, and generated content in the app.
+- **External data source connections** - Connect MCP servers, local filesystems, GitHub, and other tools or services.
+- **Skills extension** - Capture domain knowledge, tool usage patterns, and team workflows as reusable skills.
+- **Automated workflows** - Combine model capabilities, tool calls, and data sources to complete cross-system, multi-step tasks.
+- **Permission mode controls** - Confirm and manage file reads and writes, command execution, and external calls.
+- **Cross-platform distribution** - Use OpenWork as a desktop app for macOS, Windows, and Linux.
 
-- **Agentic out of the box** — Auto-Memory, Auto-Skills, SubAgents, Agent Teams, and MCP. Dynamic workflows, zero setup.
-- **Open-source, inside and out** — The framework and the Qwen models are open-source. They evolve together. No vendor lock-in.
-- **Multi-protocol** — Supports OpenAI, Anthropic, Gemini, and Qwen APIs. Any third-party provider or local model (Ollama / vLLM). Switch at runtime.
-- **Beyond the terminal** — IDE plugins, Desktop app, daemon mode, SDKs, and IM bots (Telegram / DingTalk / WeChat / Feishu).
+## Example: Complete a Local Engineering Task in One Prompt
 
-> [!TIP]
-> Qwen Code is actively iterating on itself — using its own agent and models to file issues, submit PRs, review code, and run tests. Powered by the community, driven by AI.
+A typical desktop agent workflow can start with a single natural-language request:
 
-## Installation
+> "Help me figure out why this project's tests are failing, fix the issue, and summarize the changes."
 
-**Linux / macOS:**
+OpenWork turns that request into a set of executable steps:
 
-```bash
-curl -fsSL https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.sh | bash
-```
+1. Read the current project structure, configuration files, and test scripts.
+2. Run local commands to reproduce the failure.
+3. Analyze error logs and locate the relevant code.
+4. Modify files after user authorization.
+5. Rerun tests or build commands to verify the fix.
+6. Summarize the changes, verification results, and recommended next steps.
 
-**Windows:**
+You do not need to jump back and forth between the terminal, editor, browser, and documents. You start the task in the desktop app, and the agent performs analysis, execution, and feedback inside the local workspace.
 
-```powershell
-irm https://qwen-code-assets.oss-cn-hangzhou.aliyuncs.com/installation/install-qwen-standalone.ps1 | iex
-```
+## How It Works
 
-> Restart your terminal after installation to ensure environment variables take effect.
+OpenWork runs as a desktop application paired with an agent runtime.
 
-<details>
-<summary>NPM / Homebrew</summary>
+The desktop app handles session management, workspace management, file previews, permission confirmation, external data source configuration, and user interaction. The agent runtime handles model interaction, tool use, command execution, and task progress.
 
-**NPM** (requires [Node.js 22+](https://nodejs.org/)):
+This approach keeps the engineering power of command-line agents while providing a graphical experience better suited for long-running tasks. Developers can continue using local projects and existing toolchains while gaining clearer context management, process visibility, and permission control through the desktop app.
 
-```bash
-npm install -g @qwen-code/qwen-code@latest
-```
+## Use Cases
 
-**Homebrew** (macOS / Linux):
+- Understand the structure and key modules of a codebase.
+- Diagnose test, build, or runtime failures.
+- Modify code and automatically run verification commands.
+- Work with local files, documents, spreadsheets, and execution results.
+- Connect GitHub, MCP services, or internal APIs to agent workflows.
+- Package recurring team processes as skills or automations.
+- Use agent automation in environments that require permission confirmation.
 
-```bash
-brew install qwen-code
-```
+## Relationship to ModelStudio CLI
 
-</details>
+ModelStudio CLI is designed for terminal workflows and structured tool invocation. It lets AI agents directly call model, search, multimodal, application, and knowledge-base capabilities.
 
-## Quick Start
+OpenWork provides a graphical workspace for sessions, project context, file previews, permission control, and long-running task management.
 
-```bash
-qwen          # Launch interactive terminal UI
-# Inside the session:
-/auth         # Configure your provider and API key
-```
+The CLI is better suited as a command-line tool and automation entry point. OpenWork is better suited as the daily interactive surface for using, observing, and managing agent workflows. Together, they serve the same goal: bringing ModelStudio models and tools into real development and business processes.
 
-See the [Authentication Guide](https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/) and [Settings Reference](https://qwenlm.github.io/qwen-code-docs/en/users/configuration/settings/) for detailed setup.
+## Related Links
 
-![Qwen Code](https://img.alicdn.com/imgextra/i2/O1CN01K0nwj41RM1Il8kB0t_!!6000000002096-2-tps-1544-1060.png)
+| Resource | Link |
+| :--- | :--- |
+| ModelStudio CLI | https://github.com/modelstudioai/cli |
+| ModelStudio CLI Site | https://bailian.console.aliyun.com/cli?source_channel=cli_github& |
+| Get API Key | https://bailian.console.aliyun.com/cn-beijing/?source_channel=key_github&tab=app#/api-key |
+| Alibaba Cloud ModelStudio Console | https://bailian.console.aliyun.com/?source_channel=cli_github |
+| ModelStudio API Documentation | https://help.aliyun.com/zh/model-studio/ |
+| Qwen Model List | https://help.aliyun.com/zh/model-studio/getting-started/models |
 
-## How to Use Qwen Code
+## Project Positioning
 
-| Mode            | Command         | Use Case                                                                                                                                                                                                                                        |
-| --------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Interactive** | `qwen`          | Terminal UI with rich rendering, `@file` references, slash commands                                                                                                                                                                             |
-| **Headless**    | `qwen -p "..."` | Scripts, CI/CD, batch processing — no UI                                                                                                                                                                                                        |
-| **IDE**         | —               | [VS Code](https://qwenlm.github.io/qwen-code-docs/en/users/integration-vscode/), [Zed](https://qwenlm.github.io/qwen-code-docs/en/users/integration-zed/), [JetBrains](https://qwenlm.github.io/qwen-code-docs/en/users/integration-jetbrains/) |
-| **Desktop**     | —               | [Qwen Code Desktop](https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) — GUI for macOS, Windows, Linux                                                                                                                            |
-| **Daemon**      | `qwen serve`    | Shared agent session over HTTP+SSE (ACP). Multiple clients, one agent. _(experimental)_ [Docs](https://qwenlm.github.io/qwen-code-docs/en/users/qwen-serve)                                                                                     |
-| **SDK**         | —               | [TypeScript](./packages/sdk-typescript/README.md), [Python](./packages/sdk-python/README.md), [Java](./packages/sdk-java/qwencode/README.md)                                                                                                    |
-| **IM Bot**      | `qwen channel`  | Connect to Telegram, DingTalk, WeChat, or Feishu                                                                                                                                                                                                |
-
-<details>
-<summary>SDK example (Python)</summary>
-
-```python
-import asyncio
-
-from qwen_code_sdk import is_sdk_result_message, query
-
-
-async def main() -> None:
-    result = query(
-        "Summarize the repository layout.",
-        {
-            "cwd": "/path/to/project",
-            "path_to_qwen_executable": "qwen",
-        },
-    )
-
-    async for message in result:
-        if is_sdk_result_message(message):
-            print(message["result"])
-
-
-asyncio.run(main())
-```
-
-</details>
-
-## Capabilities
-
-If you know Claude Code, you already know Qwen Code — and then some. We've put significant effort into [bringing Qwen Code to feature parity with Claude Code](https://github.com/wenshao/codeagents/blob/main/docs/comparison/qwen-code-improvement-report.md), improving both breadth and reliability across the board.
-
-| Feature                                                            | Qwen Code | Claude Code |
-| ------------------------------------------------------------------ | :-------: | :---------: |
-| SubAgents, Agent Teams, Dynamic Workflows                          |     ✓     |      ✓      |
-| Auto-Memory, Auto-Skills, Hooks                                    |     ✓     |      ✓      |
-| Built-in Skills (/review, /batch, /loop, /bugfix…)                 |     ✓     |      ✓      |
-| MCP, Plan Mode, LSP Integration                                    |     ✓     |      ✓      |
-| Auto Mode, Sandbox, Git Worktrees                                  |     ✓     |      ✓      |
-| Computer Use (desktop automation)                                  |     ✓     |      ✓      |
-| IDE Plugins (VS Code / JetBrains / Zed)                            |     ✓     |      ✓      |
-| SDK                                                                |     ✓     |      ✓      |
-| Headless Mode, Session Management                                  |     ✓     |      ✓      |
-| Open-source — model and framework                                  |     ✓     |      —      |
-| Multi-protocol (OpenAI / Anthropic / Gemini / Qwen + any provider) |     ✓     |      —      |
-| Agent Arena (multi-model head-to-head on same task)                |     ✓     |      —      |
-| Daemon Mode — `qwen serve` (multi-client shared agent)             |     ✓     |      —      |
-| IM Channels (Telegram / DingTalk / WeChat / Feishu)                |     ✓     |      —      |
-
-## Ecosystem
-
-- [**Qwen Code Desktop**](https://github.com/QwenLM/qwen-code/releases/tag/desktop-latest) — Official desktop app for macOS, Windows, and Linux
-- [**AionUi**](https://github.com/iOfficeAI/AionUi) — A modern GUI for command-line AI tools including Qwen Code
-- [**Gemini CLI Desktop**](https://github.com/Piebald-AI/gemini-cli-desktop) — A cross-platform desktop/web/mobile UI for Qwen Code
-
-- [**🦞 Qwen Code Claw**](https://github.com/openclaw/acpx) — Let other agents (Claude, Codex, etc.) delegate coding tasks to Qwen Code via ACP. Paste this prompt into your agent:
-
-```text
-Use Qwen Code as a coding agent. First, fetch and read this skill reference:
-https://raw.githubusercontent.com/QwenLM/qwen-code/refs/heads/main/.qwen/skills/qwen-code-claw/SKILL.md
-Then follow the instructions inside to install, authenticate, and use Qwen Code via acpx for all coding tasks.
-```
-
-- [**Aliyun Model Studio CLI**](https://github.com/modelstudioai/cli) — Official CLI for Aliyun's AI platform (`bailian-cli`). Extends Qwen Code with image/video generation, knowledge retrieval, app orchestration, and model deployment
-
-## Contributing
-
-Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+OpenWork is the desktop entry point for the ModelStudio AI agent ecosystem. It organizes capabilities that are often scattered across terminals, editors, tool platforms, and local files into one workspace, so agents can do more than answer questions: they can connect context, call tools, execute tasks, and produce results.
 
 ## Acknowledgments
 
-This project was originally based on [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) v0.8.2. We gratefully acknowledge the Gemini CLI team's excellent work. Starting from Qwen Code v0.1, we stopped syncing with upstream and began independent development as a multi-protocol, multi-platform agent framework with deep integrations for Qwen models and beyond.
+ModelStudio OpenWork is adapted and extended from the desktop architecture of [Craft Agents OSS](https://github.com/craft-ai-agents/craft-agents-oss), which provides important foundations for the desktop app, session workspace, agent interaction model, and local-first experience.
+
+OpenWork's technical foundation is [Qwen Code](https://github.com/QwenLM/qwen-code), whose agent runtime capabilities support code understanding, tool use, command execution, and engineering task workflows.
+
+We are grateful to these open source projects for the foundations they provide to ModelStudio OpenWork.
+
+## 📖 Full Tutorial
+
+Step-by-step setup, hands-on walkthroughs, and end-to-end examples are on our docs site:
+
+**[modelstudioai.github.io/guide/](https://modelstudioai.github.io/guide/)**
+
+## License
+
+Apache 2.0. Third-party dependencies are listed in package manifests and are subject to their respective licenses.

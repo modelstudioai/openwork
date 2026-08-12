@@ -34,9 +34,9 @@ static FULLSCREEN_HIDE_PENDING: AtomicBool = AtomicBool::new(false);
 static FULLSCREEN_HIDE_GENERATION: AtomicU64 = AtomicU64::new(0);
 // Keep the default first-launch workspace aligned with the Electron shell's
 // getDefaultConversationWorkspacePath() in
-// packages/desktop/packages/shared/src/config/storage.ts: ~/Documents/Qwen,
-// relocatable through QWEN_DEFAULT_WORKSPACE_DIR (see default_workspace).
-const DEFAULT_WORKSPACE_DIRECTORY: &str = "Qwen";
+// packages/desktop/packages/shared/src/config/storage.ts: ~/Documents/OpenWork,
+// relocatable through OPENWORK_DEFAULT_WORKSPACE_DIR (see default_workspace).
+const DEFAULT_WORKSPACE_DIRECTORY: &str = "OpenWork";
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -119,7 +119,7 @@ fn main() {
     let app = match builder.build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(error) => {
-            eprintln!("Failed to initialize Qwen Code desktop: {error}");
+            eprintln!("Failed to initialize OpenWork desktop: {error}");
             return;
         }
     };
@@ -234,7 +234,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
         stop_runtime(&runtime_exit_handle);
         *lock(&state.origin) = None;
-        let message = format!("Qwen Code stopped: {}", stopped.status);
+        let message = format!("OpenWork stopped: {}", stopped.status);
         *lock(&state.last_error) = Some(message.clone());
         let _ = navigate_to_bootstrap(&runtime_exit_handle);
         let _ = runtime_exit_handle.emit("runtime-failed", message);
@@ -242,7 +242,7 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let (width, height) = default_window_size();
 
     let window = WebviewWindowBuilder::new(&handle, "main", WebviewUrl::App("index.html".into()))
-        .title("Qwen Code")
+        .title("OpenWork")
         .inner_size(width, height)
         .min_inner_size(900.0, 600.0)
         .on_navigation(move |url| is_allowed_navigation(url, &navigation_origin))
@@ -335,7 +335,7 @@ async fn choose_workspace(
         move || {
             app.dialog()
                 .file()
-                .set_title("Choose a Qwen Code workspace")
+                .set_title("Choose a OpenWork workspace")
                 .blocking_pick_folder()
         }
     })
@@ -444,9 +444,9 @@ async fn install_update(webview: WebviewWindow, app: AppHandle) -> Result<(), St
         move || {
             app.dialog()
                 .message(format!(
-                    "Install Qwen Code Desktop {version} and restart now?"
+                    "Install OpenWork {version} and restart now?"
                 ))
-                .title("Qwen Code update")
+                .title("OpenWork update")
                 .kind(MessageDialogKind::Info)
                 .buttons(MessageDialogButtons::OkCancelCustom(
                     "Install and restart".to_string(),
@@ -642,7 +642,7 @@ fn set_local_control_menu_state(app: &AppHandle, active: bool) {
 // only: directory creation happens off the main thread in start_runtime_async
 // because the first touch of ~/Documents can trigger the macOS TCC prompt.
 fn initial_workspace(app: &AppHandle) -> Result<(PathBuf, bool), String> {
-    if let Some(workspace) = std::env::var_os("QWEN_DESKTOP_WORKSPACE") {
+    if let Some(workspace) = std::env::var_os("OPENWORK_DESKTOP_WORKSPACE") {
         return Ok((PathBuf::from(workspace), false));
     }
     if let Some(workspace) = app.state::<ApplicationState>().settings.workspace() {
@@ -653,9 +653,9 @@ fn initial_workspace(app: &AppHandle) -> Result<(PathBuf, bool), String> {
 
 fn default_workspace(app: &AppHandle) -> Result<(PathBuf, bool), String> {
     // Matches the Electron shell, where an empty override falls back to the
-    // ~/Documents/Qwen default.
+    // ~/Documents/OpenWork default.
     let override_dir =
-        default_workspace_override_dir(std::env::var_os("QWEN_DEFAULT_WORKSPACE_DIR"));
+        default_workspace_override_dir(std::env::var_os("OPENWORK_DEFAULT_WORKSPACE_DIR"));
     let home = app
         .path()
         .home_dir()
@@ -666,7 +666,7 @@ fn default_workspace(app: &AppHandle) -> Result<(PathBuf, bool), String> {
     ))
 }
 
-// An empty override is treated as unset so the ~/Documents/Qwen default wins,
+// An empty override is treated as unset so the ~/Documents/OpenWork default wins,
 // mirroring the Electron shell's `||` fallback.
 fn default_workspace_override_dir(value: Option<OsString>) -> Option<PathBuf> {
     value
@@ -756,7 +756,7 @@ fn show_local_control_window(app: &AppHandle) -> Result<(), String> {
         "local-control",
         WebviewUrl::App("local-control.html".into()),
     )
-    .title("Qwen Code Local Control")
+    .title("OpenWork Local Control")
     .inner_size(440.0, 500.0)
     .min_inner_size(400.0, 500.0)
     .resizable(false)
@@ -838,9 +838,9 @@ fn check_updates_silently(app: AppHandle) {
             move || {
                 app.dialog()
                     .message(format!(
-                        "Qwen Code Desktop {version} is available. Install and restart now?"
+                        "OpenWork {version} is available. Install and restart now?"
                     ))
-                    .title("Qwen Code update")
+                    .title("OpenWork update")
                     .kind(MessageDialogKind::Info)
                     .buttons(MessageDialogButtons::OkCancelCustom(
                         "Install and restart".to_string(),
@@ -860,9 +860,9 @@ fn check_updates_silently(app: AppHandle) {
                 move || {
                     app.dialog()
                         .message(format!(
-                            "Qwen Code Desktop {version} could not be installed.\n\n{error}\n\nSave your work before quitting. Reinstall Qwen Code if it does not reopen."
+                            "OpenWork {version} could not be installed.\n\n{error}\n\nSave your work before quitting. Reinstall OpenWork if it does not reopen."
                         ))
-                        .title("Qwen Code update failed")
+                        .title("OpenWork update failed")
                         .kind(MessageDialogKind::Error)
                         .blocking_show()
                 }
@@ -963,7 +963,7 @@ mod tests {
     #[test]
     fn creates_and_reuses_the_default_workspace() {
         let home = std::env::temp_dir().join(format!(
-            "qwen-desktop-default-workspace-{}",
+            "openwork-desktop-default-workspace-{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&home);
@@ -980,7 +980,7 @@ mod tests {
     #[test]
     fn reports_an_uncreatable_default_workspace() {
         let home = std::env::temp_dir().join(format!(
-            "qwen-desktop-default-workspace-error-{}",
+            "openwork-desktop-default-workspace-error-{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&home);
@@ -1010,11 +1010,11 @@ mod tests {
     #[test]
     fn honors_the_default_workspace_directory_override() {
         let home = std::env::temp_dir().join(format!(
-            "qwen-desktop-default-workspace-override-home-{}",
+            "openwork-desktop-default-workspace-override-home-{}",
             std::process::id()
         ));
         let custom = std::env::temp_dir().join(format!(
-            "qwen-desktop-default-workspace-override-target-{}",
+            "openwork-desktop-default-workspace-override-target-{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&home);

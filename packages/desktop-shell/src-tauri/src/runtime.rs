@@ -14,7 +14,6 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
 
-const LISTEN_PREFIX: &str = "qwen serve listening on ";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 const HEALTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
@@ -59,12 +58,12 @@ impl DesktopRuntime {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .env("QWEN_CODE_DESKTOP", "1")
-            .env("QWEN_SERVER_TOKEN", &token);
+            .env("OPENWORK_DESKTOP", "1")
+            .env("OPENWORK_SERVER_TOKEN", &token);
 
         let mut child = command
             .group_spawn()
-            .map_err(|error| format!("Failed to start bundled Qwen Code runtime: {error}"))?;
+            .map_err(|error| format!("Failed to start bundled OpenWork runtime: {error}"))?;
         let Some(stdout) = child.inner().stdout.take() else {
             stop_runtime_child(&mut child);
             return Err("Bundled runtime stdout was not captured.".to_string());
@@ -148,23 +147,23 @@ struct RuntimeLayout {
 
 impl RuntimeLayout {
     fn resolve(app: &AppHandle) -> Result<Self, String> {
-        let root = if let Some(path) = std::env::var_os("QWEN_DESKTOP_RUNTIME_DIR") {
+        let root = if let Some(path) = std::env::var_os("OPENWORK_DESKTOP_RUNTIME_DIR") {
             PathBuf::from(path)
         } else if cfg!(debug_assertions) {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("..")
                 .join("runtime")
-                .join("qwen-code")
+                .join("openwork")
         } else {
             app.path()
                 .resource_dir()
                 .map_err(|error| format!("Failed to resolve desktop resources: {error}"))?
                 .join("runtime")
-                .join("qwen-code")
+                .join("openwork")
         };
         let (node, entry) = layout_from_root(root);
         require_file(&node, "Node.js runtime")?;
-        require_file(&entry, "Qwen Code runtime entry")?;
+        require_file(&entry, "OpenWork runtime entry")?;
         Ok(Self { node, entry })
     }
 }
@@ -376,14 +375,18 @@ fn monitor_runtime(
 }
 
 fn parse_listening_url(line: &str) -> Option<Url> {
-    let rest = line.strip_prefix(LISTEN_PREFIX)?;
-    let raw_url = rest.split_whitespace().next()?;
-    let url = Url::parse(raw_url).ok()?;
-    if url.scheme() == "http" && url.host_str() == Some("127.0.0.1") {
-        Some(url)
-    } else {
-        None
+    if let Ok(event) = serde_json::from_str::<serde_json::Value>(line) {
+        if event.get("event").and_then(|v| v.as_str()) == Some("openwork-server-listening") {
+            if let Some(url_str) = event.get("url").and_then(|v| v.as_str()) {
+                if let Ok(url) = Url::parse(url_str) {
+                    if url.scheme() == "http" && url.host_str() == Some("127.0.0.1") {
+                        return Some(url);
+                    }
+                }
+            }
+        }
     }
+    None
 }
 
 enum StartupChildState {
@@ -554,7 +557,7 @@ mod tests {
 
     #[test]
     fn resolve_workspace_strips_windows_verbatim_prefix() {
-        let dir = std::env::temp_dir().join(format!("qwen-desktop-ws-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("openwork-desktop-ws-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("create temp workspace");
         let resolved = resolve_workspace(&dir).expect("resolve workspace");
         std::fs::remove_dir_all(&dir).expect("cleanup temp workspace");
@@ -585,7 +588,7 @@ mod tests {
         use std::os::windows::ffi::OsStrExt;
 
         let base =
-            std::env::temp_dir().join(format!("qwen-desktop-long-ws-{}", std::process::id()));
+            std::env::temp_dir().join(format!("openwork-desktop-long-ws-{}", std::process::id()));
         let mut workspace = PathBuf::from(format!(r"\\?\{}", base.display()));
         while workspace.as_os_str().encode_wide().count() <= 270 {
             workspace.push("long-workspace-component");
@@ -603,7 +606,7 @@ mod tests {
     fn runtime_layout_strips_windows_verbatim_prefix() {
         let root = PathBuf::from(r"\\?\C:\Users\user\AppData\Local\Qwen Code Desktop")
             .join("runtime")
-            .join("qwen-code");
+            .join("openwork");
         let (node, entry) = layout_from_root(root);
         for path in [node, entry] {
             let path = path.to_string_lossy();
@@ -617,7 +620,7 @@ mod tests {
     #[test]
     fn parses_loopback_listening_line() {
         let url = parse_listening_url(
-            "qwen serve listening on http://127.0.0.1:49152 (mode=stdio, workspace=/tmp)",
+            r#"{"event":"openwork-server-listening","url":"http://127.0.0.1:49152","pid":12345}"#,
         )
         .expect("listening URL");
         assert_eq!(url.as_str(), "http://127.0.0.1:49152/");
@@ -626,7 +629,7 @@ mod tests {
     #[test]
     fn rejects_non_loopback_listening_line() {
         assert!(parse_listening_url(
-            "qwen serve listening on http://0.0.0.0:4170 (mode=stdio, workspace=/tmp)"
+            r#"{"event":"openwork-server-listening","url":"http://0.0.0.0:4170","pid":12345}"#,
         )
         .is_none());
     }

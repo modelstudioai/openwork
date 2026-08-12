@@ -18,7 +18,7 @@ if (!fs.statSync(executable, { throwIfNoEntry: false })?.isFile()) {
   throw new Error(`Packaged executable is missing: ${executable}`);
 }
 
-const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen-desktop-smoke-'));
+const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'openwork-desktop-smoke-'));
 const isolatedHome = path.join(workspace, 'home');
 const isolatedState = path.join(workspace, 'state');
 fs.mkdirSync(isolatedHome);
@@ -51,8 +51,8 @@ const child = spawn(executable, [], {
   detached: process.platform !== 'win32',
   env: {
     ...process.env,
-    QWEN_DESKTOP_WORKSPACE: workspace,
-    QWEN_CODE_SUPPRESS_YOLO_WARNING: '1',
+    OPENWORK_DESKTOP_WORKSPACE: workspace,
+    OPENWORK_CODE_SUPPRESS_YOLO_WARNING: '1',
     HOME: isolatedHome,
     XDG_STATE_HOME: isolatedState,
     XDG_DATA_HOME: isolatedState,
@@ -62,14 +62,14 @@ const child = spawn(executable, [], {
     ...(process.platform === 'darwin'
       ? {}
       : {
-          QWEN_DESKTOP_RUNTIME_DIR: path.join(
+          OPENWORK_DESKTOP_RUNTIME_DIR: path.join(
             packageDir,
             'runtime',
             'qwen-code',
           ),
         }),
     ...(process.platform === 'win32'
-      ? { QWEN_DESKTOP_DISABLE_SETTINGS_PERSISTENCE: '1' }
+      ? { OPENWORK_DESKTOP_DISABLE_SETTINGS_PERSISTENCE: '1' }
       : {}),
   },
   stdio: ['ignore', 'pipe', 'pipe'],
@@ -110,7 +110,7 @@ async function waitForReady() {
     if (exitFailure) throw exitFailure;
     const contents = readNewLog();
     const match = contents.match(
-      /qwen serve listening on (http:\/\/127\.0\.0\.1:\d+)/,
+      /openwork serve listening on (http:\/\/127\.0\.0\.1:\d+)/,
     );
     if (match) {
       await verifyPackagedShell(match[1], contents);

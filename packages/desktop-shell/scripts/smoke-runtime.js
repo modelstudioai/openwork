@@ -36,7 +36,7 @@ const child = spawn(
   ],
   {
     cwd: packageDir,
-    env: { ...process.env, QWEN_SERVER_TOKEN: token },
+    env: { ...process.env, OPENWORK_SERVER_TOKEN: token },
     stdio: ['ignore', 'pipe', 'pipe'],
   },
 );
@@ -52,7 +52,7 @@ child.stdout.setEncoding('utf8');
 child.stderr.setEncoding('utf8');
 child.stdout.on('data', (chunk) => {
   output += chunk;
-  const match = output.match(/qwen serve listening on (http:\/\/[^\s]+)/);
+  const match = output.match(/openwork serve listening on (http:\/\/[^\s]+)/);
   if (match && !verifying) {
     verifying = true;
     void verify(match[1]).catch(finish);
