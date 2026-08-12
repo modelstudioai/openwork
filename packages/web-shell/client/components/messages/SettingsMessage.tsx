@@ -75,8 +75,9 @@ import { Separator } from '../ui/separator';
 import { Spinner } from '../ui/spinner';
 import { Switch } from '../ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { OpenWorkAppearanceSettings } from '../../openwork/OpenWorkDesktopLayer';
 
-type ChatWidthMode = '1000' | 'wide';
+type ChatWidthMode = '840' | '1100' | 'wide';
 
 interface SettingsMessageProps {
   settingsState: SettingsMessageSettingsState;
@@ -246,6 +247,7 @@ interface CategoryGroup {
 type SettingsPageItem =
   | { type: 'setting'; setting: DaemonSettingDescriptor }
   | { type: 'local'; localKey: 'chatWidth' }
+  | { type: 'openwork' }
   | { type: 'live' };
 
 interface SettingsPageCategory {
@@ -426,9 +428,10 @@ export function SettingsMessage({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [restartPending, setRestartPending] = useState(false);
+  const [query, setQuery] = useState('');
 
   const showInitialLoading = loading && !status;
-  const categories = useMemo(() => {
+  const allCategories = useMemo(() => {
     const visibleSettings = settings.filter(
       (setting) =>
         !HIDDEN_SETTING_KEYS.has(setting.key) &&
@@ -467,6 +470,8 @@ export function SettingsMessage({
         items: [localItem],
       });
     }
+    const uiGroup = groups.find((group) => group.id === 'UI');
+    if (uiGroup) uiGroup.items.push({ type: 'openwork' });
     if (liveSetup?.supported) {
       const experimental = groups.find((group) => group.id === 'Experimental');
       if (experimental) {
@@ -481,6 +486,53 @@ export function SettingsMessage({
     }
     return groups;
   }, [liveSetup, settings, t]);
+  const categories = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return allCategories;
+    return allCategories
+      .map((category) => {
+        const categoryMatches = category.label
+          .toLowerCase()
+          .includes(normalized);
+        return {
+          ...category,
+          items: categoryMatches
+            ? category.items
+            : category.items.filter((item) => {
+                if (item.type === 'live')
+                  return 'live voice'.includes(normalized);
+                if (item.type === 'openwork') {
+                  return [
+                    'theme zoom text size contrast motion animation keep awake power pet',
+                    t('openwork.appearance.theme'),
+                    t('openwork.appearance.zoom'),
+                    t('openwork.appearance.textSize'),
+                    t('openwork.appearance.contrast'),
+                    t('openwork.appearance.reduceMotion'),
+                    t('openwork.appearance.keepAwake'),
+                    t('openwork.appearance.pet'),
+                  ]
+                    .join(' ')
+                    .toLowerCase()
+                    .includes(normalized);
+                }
+                if (item.type === 'local') {
+                  return `${t('settings.label.ui.chatWidth')} ${t('settings.description.ui.chatWidth')}`
+                    .toLowerCase()
+                    .includes(normalized);
+                }
+                return `${formatSettingLabel(item.setting, t)} ${formatSettingDescription(item.setting, t) ?? ''}`
+                  .toLowerCase()
+                  .includes(normalized);
+              }),
+        };
+      })
+      .filter(
+        (category) =>
+          category.items.length > 0 ||
+          category.label.toLowerCase().includes(normalized),
+      );
+  }, [allCategories, query, t]);
 
   useEffect(() => {
     if (categories.length === 0) return;
@@ -702,7 +754,7 @@ export function SettingsMessage({
           setScope(next as Scope);
         }}
       >
-        <div className="flex items-center justify-between gap-4 border-b border-border px-3 py-2">
+        <div className="flex items-center justify-between gap-4 border-b border-border px-3 py-2 max-md:flex-wrap">
           <TabsList className="p-0">
             <TabsTrigger value="workspace">
               {t('settings.scope.workspace')}
@@ -712,6 +764,14 @@ export function SettingsMessage({
           {restartPending && (
             <Badge variant="secondary">{t('settings.requiresRestart')}</Badge>
           )}
+          <Input
+            type="search"
+            value={query}
+            className="ml-auto w-[min(260px,45vw)] max-md:w-full"
+            placeholder={t('common.search')}
+            aria-label={t('common.search')}
+            onChange={(event) => setQuery(event.target.value)}
+          />
         </div>
 
         <TabsContent
@@ -790,9 +850,15 @@ export function SettingsMessage({
                                     ),
                                   [
                                     {
-                                      value: '1000',
+                                      value: '840',
                                       label: t(
-                                        'settings.option.ui.chatWidth.1000',
+                                        'settings.option.ui.chatWidth.840',
+                                      ),
+                                    },
+                                    {
+                                      value: '1100',
+                                      label: t(
+                                        'settings.option.ui.chatWidth.1100',
                                       ),
                                     },
                                     {
@@ -816,6 +882,14 @@ export function SettingsMessage({
                               <LiveVoiceSettingsCard setup={liveSetup} />
                             </div>
                           ) : null;
+                        }
+                        if (item.type === 'openwork') {
+                          return (
+                            <div key="openwork-appearance">
+                              {separator}
+                              <OpenWorkAppearanceSettings />
+                            </div>
+                          );
                         }
 
                         const setting = item.setting;

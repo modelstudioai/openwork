@@ -10,6 +10,7 @@
     "build:runtime": "node scripts/prepare-runtime.js",
     "smoke:runtime": "node scripts/smoke-runtime.js",
     "smoke:packaged": "node scripts/smoke-packaged.js",
+    "test:migration": "node scripts/test-migration.js",
     "test:release": "node scripts/test-release.js",
     "version": "node scripts/version.js",
     "test": "cargo test --manifest-path src-tauri/Cargo.toml"

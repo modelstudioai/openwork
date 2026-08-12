@@ -1,0 +1,186 @@
+name: Desktop Build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      release_name:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      publish:
+        required: true
+        type: boolean
+      draft:
+        required: true
+        type: boolean
+      prerelease:
+        required: true
+        type: boolean
+
+jobs:
+  desktop:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            os: macos-15
+            target: aarch64-apple-darwin
+          - name: macOS Intel
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+          - name: Windows x64
+            os: windows-2025
+            target: x86_64-pc-windows-msvc
+          - name: Linux x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+    steps:
+      - name: Check out source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: packages/desktop-shell/src-tauri -> target
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev libfuse2
+
+      - name: Validate signing configuration
+        if: inputs.publish
+        shell: bash
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER || secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY || secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_API_KEY_P8_INPUT: ${{ secrets.APPLE_API_KEY_P8_BASE64 || secrets.APPLE_NOTARY_API_KEY_P8_BASE64 }}
+          APPLE_CERTIFICATE_INPUT: ${{ secrets.APPLE_CERTIFICATE || secrets.MAC_CSC_LINK }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
+          OPENWORK_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          WINDOWS_CERTIFICATE_INPUT: ${{ secrets.WINDOWS_CERTIFICATE || secrets.WIN_CSC_LINK }}
+          WINDOWS_CERTIFICATE_PASSWORD_INPUT: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" || -z "$OPENWORK_UPDATER_PUBLIC_KEY" ]]; then
+            echo "::error::Published releases require TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PUBLIC_KEY."
+            exit 1
+          fi
+          if [[ "$RUNNER_OS" == "macOS" && ( -z "$APPLE_CERTIFICATE_INPUT" || -z "$APPLE_CERTIFICATE_PASSWORD" || -z "$APPLE_API_ISSUER" || -z "$APPLE_API_KEY" || -z "$APPLE_API_KEY_P8_INPUT" ) ]]; then
+            echo "::error::Published macOS releases require signing and App Store Connect notarization secrets."
+            exit 1
+          fi
+          if [[ "$RUNNER_OS" == "Windows" && -n "$WINDOWS_CERTIFICATE_INPUT" && -z "$WINDOWS_CERTIFICATE_PASSWORD_INPUT" ]]; then
+            echo "::error::A configured Windows certificate requires its password."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci --no-audit --progress=false
+
+      - name: Install desktop tooling
+        run: npm ci --prefix packages/desktop-shell --workspaces=false --no-audit --progress=false
+
+      - name: Set desktop version
+        run: node packages/desktop-shell/scripts/version.js "${{ inputs.version }}"
+
+      - name: Prepare bundled runtime
+        env:
+          OPENWORK_DESKTOP_TARGET: ${{ matrix.target }}
+        run: npm run build:runtime --prefix packages/desktop-shell --workspaces=false
+
+      - name: Configure macOS signing and notarization
+        if: runner.os == 'macOS' && inputs.publish
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY || secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_API_KEY_P8_INPUT: ${{ secrets.APPLE_API_KEY_P8_BASE64 || secrets.APPLE_NOTARY_API_KEY_P8_BASE64 }}
+          APPLE_CERTIFICATE_INPUT: ${{ secrets.APPLE_CERTIFICATE || secrets.MAC_CSC_LINK }}
+        run: |
+          set -euo pipefail
+          if [[ "$APPLE_CERTIFICATE_INPUT" =~ ^https?:// ]]; then
+            certificate_path="$RUNNER_TEMP/openwork-signing.p12"
+            curl --fail --silent --show-error --location "$APPLE_CERTIFICATE_INPUT" --output "$certificate_path"
+            certificate="$(base64 < "$certificate_path" | tr -d '\n')"
+          else
+            certificate="${APPLE_CERTIFICATE_INPUT#*base64,}"
+          fi
+          echo "APPLE_CERTIFICATE=$certificate" >> "$GITHUB_ENV"
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          APPLE_KEY_PATH="$key_path" node -e "require('node:fs').writeFileSync(process.env.APPLE_KEY_PATH, Buffer.from(process.env.APPLE_API_KEY_P8_INPUT, 'base64'), { mode: 0o600 })"
+          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
+      - name: Import Windows signing certificate
+        if: runner.os == 'Windows' && inputs.publish
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_INPUT: ${{ secrets.WINDOWS_CERTIFICATE || secrets.WIN_CSC_LINK }}
+          WINDOWS_CERTIFICATE_PASSWORD_INPUT: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE_INPUT) { exit 0 }
+          $certificatePath = Join-Path $env:RUNNER_TEMP 'openwork-signing.pfx'
+          if ($env:WINDOWS_CERTIFICATE_INPUT -match '^https?://') {
+            Invoke-WebRequest -Uri $env:WINDOWS_CERTIFICATE_INPUT -OutFile $certificatePath
+          } else {
+            $encoded = $env:WINDOWS_CERTIFICATE_INPUT -replace '^.*base64,', ''
+            [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($encoded))
+          }
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD_INPUT -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $certificatePath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          if (-not $certificate.HasPrivateKey) { throw 'The Windows certificate has no private key.' }
+          "WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure platform signing
+        shell: bash
+        env:
+          IS_PUBLISH: ${{ inputs.publish }}
+          OPENWORK_UPDATER_PUBLIC_KEY: ${{ inputs.publish && secrets.TAURI_SIGNING_PUBLIC_KEY || '' }}
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; const publish = process.env.IS_PUBLISH === 'true'; const thumbprint = process.env.WINDOWS_CERTIFICATE_THUMBPRINT; const config = { bundle: { createUpdaterArtifacts: publish, ...(thumbprint ? { windows: { certificateThumbprint: thumbprint } } : {}) }, ...(publish ? { plugins: { updater: { pubkey: process.env.OPENWORK_UPDATER_PUBLIC_KEY } } } : {}) }; fs.writeFileSync('packages/desktop-shell/src-tauri/release.conf.json', JSON.stringify(config));"
+
+      - name: Build desktop artifacts
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ inputs.publish && secrets.GITHUB_TOKEN || '' }}
+          APPLE_API_ISSUER: ${{ runner.os == 'macOS' && inputs.publish && (secrets.APPLE_API_ISSUER || secrets.APPLE_NOTARY_ISSUER_ID) || '' }}
+          APPLE_API_KEY: ${{ runner.os == 'macOS' && inputs.publish && (secrets.APPLE_API_KEY || secrets.APPLE_NOTARY_KEY_ID) || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && inputs.publish && (secrets.APPLE_CERTIFICATE_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD) || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && inputs.publish && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ inputs.publish && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ inputs.publish && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+        with:
+          projectPath: packages/desktop-shell
+          args: --config src-tauri/release.conf.json --target ${{ matrix.target }}
+          tagName: ${{ inputs.publish && inputs.tag || '' }}
+          releaseName: ${{ inputs.publish && inputs.release_name || '' }}
+          releaseDraft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          generateReleaseNotes: true
+          uploadUpdaterJson: ${{ inputs.publish }}
+          uploadUpdaterSignatures: ${{ inputs.publish }}
+          updaterJsonPreferNsis: true
+          uploadWorkflowArtifacts: true

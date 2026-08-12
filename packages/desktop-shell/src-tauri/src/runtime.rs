@@ -49,8 +49,15 @@ impl DesktopRuntime {
     ) -> Result<Self, String> {
         let id = NEXT_RUNTIME_ID.fetch_add(1, Ordering::Relaxed);
         let layout = RuntimeLayout::resolve(app)?;
+        run_legacy_migration(&layout)?;
         // Callers pass a workspace already resolved by resolve_workspace.
         let token = random_token();
+        let mut runtime_path = vec![layout.tools_bin.clone(), layout.uv_dir.clone()];
+        if let Some(path) = std::env::var_os("PATH") {
+            runtime_path.extend(std::env::split_paths(&path));
+        }
+        let runtime_path = std::env::join_paths(runtime_path)
+            .map_err(|error| format!("Failed to configure document tools: {error}"))?;
         let mut command = Command::new(&layout.node);
         command
             .arg(&layout.entry)
@@ -61,7 +68,11 @@ impl DesktopRuntime {
             .stderr(Stdio::piped())
             .env("OPENWORK_DESKTOP", "1")
             .env("QWEN_CODE_DESKTOP", "1")
-            .env("QWEN_SERVER_TOKEN", &token);
+            .env("QWEN_SERVER_TOKEN", &token)
+            .env("CRAFT_IS_PACKAGED", "1")
+            .env("CRAFT_UV", &layout.uv)
+            .env("CRAFT_SCRIPTS", &layout.scripts)
+            .env("PATH", runtime_path);
 
         let mut child = command
             .group_spawn()
@@ -152,6 +163,11 @@ impl Drop for DesktopRuntime {
 struct RuntimeLayout {
     node: PathBuf,
     entry: PathBuf,
+    tools_bin: PathBuf,
+    uv_dir: PathBuf,
+    uv: PathBuf,
+    scripts: PathBuf,
+    migration: PathBuf,
 }
 
 impl RuntimeLayout {
@@ -171,10 +187,50 @@ impl RuntimeLayout {
                 .join("openwork")
         };
         let (node, entry) = layout_from_root(root);
+        let tools = entry
+            .parent()
+            .and_then(Path::parent)
+            .expect("runtime entry has a package root")
+            .join("tools");
+        let tools_bin = dunce::simplified(&tools.join("bin")).to_path_buf();
+        let uv_dir = dunce::simplified(&tools.join("uv")).to_path_buf();
+        let uv = uv_dir.join(if cfg!(windows) { "uv.exe" } else { "uv" });
+        let scripts = dunce::simplified(&tools.join("scripts")).to_path_buf();
+        let migration = dunce::simplified(&tools.join("openwork-migrate.mjs")).to_path_buf();
         require_file(&node, "Node.js runtime")?;
         require_file(&entry, "Qwen Code runtime entry")?;
-        Ok(Self { node, entry })
+        require_file(&uv, "uv runtime")?;
+        require_file(&scripts.join("pdf_tool.py"), "document tool scripts")?;
+        require_file(&migration, "OpenWork data migration")?;
+        Ok(Self {
+            node,
+            entry,
+            tools_bin,
+            uv_dir,
+            uv,
+            scripts,
+            migration,
+        })
     }
+}
+
+fn run_legacy_migration(layout: &RuntimeLayout) -> Result<(), String> {
+    if std::env::var_os("OPENWORK_DESKTOP_DISABLE_MIGRATION").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        return Ok(());
+    }
+    let output = Command::new(&layout.node)
+        .arg(&layout.migration)
+        .output()
+        .map_err(|error| format!("Failed to start OpenWork data migration: {error}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(format!(
+        "OpenWork data migration failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    ))
 }
 
 fn layout_from_root(root: PathBuf) -> (PathBuf, PathBuf) {

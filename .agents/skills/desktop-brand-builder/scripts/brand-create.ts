@@ -1,15 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import { extname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 interface BrandInput {
   brandId?: string;
@@ -17,7 +9,6 @@ interface BrandInput {
   website?: string;
   appName?: string;
   appId?: string;
-  artifactPrefix?: string;
   copyright?: string;
 }
 
@@ -27,7 +18,6 @@ interface BrandConfig {
   website?: string;
   appName: string;
   appId: string;
-  artifactPrefix: string;
   copyright: string;
 }
 
@@ -38,341 +28,233 @@ function argValue(name: string): string | undefined {
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
-function configPathFromArgs(): string {
-  const value = argValue('--config');
+function requiredPath(name: string): string {
+  const value = argValue(name);
   if (!value) {
     throw new Error(
-      'Usage: bun run scripts/brand-create.ts --desktop-root /path/to/packages/desktop --config /path/to/brand.json',
+      'Usage: npx tsx brand-create.ts --desktop-root /path/to/packages/desktop-shell --config /path/to/brand.json',
     );
   }
   return resolve(value);
 }
 
-function desktopRootFromArgs(): string {
-  const value = argValue('--desktop-root');
-  if (!value) {
-    throw new Error(
-      'Usage: bun run scripts/brand-create.ts --desktop-root /path/to/packages/desktop --config /path/to/brand.json',
-    );
-  }
-
-  const desktopRoot = resolve(value);
-  if (!existsSync(join(desktopRoot, 'package.json'))) {
-    throw new Error(`Desktop package not found: ${desktopRoot}`);
-  }
-  return desktopRoot;
-}
-
 function titleWords(brandId: string): string[] {
   return brandId
     .split('-')
-    .filter(Boolean)
     .map((part) => part[0]!.toUpperCase() + part.slice(1));
 }
 
 function deriveAppId(website: string | undefined, brandId: string): string {
-  if (!website) return `app.${brandId}.desktop`;
-
   try {
-    const withProtocol = website.includes('://')
-      ? website
-      : `https://${website}`;
-    const host = new URL(withProtocol).hostname.replace(/^www\./, '');
+    const host = new URL(
+      website?.includes('://') ? website : `https://${website}`,
+    ).hostname.replace(/^www\./, '');
     const parts = host.split('.').filter(Boolean);
-    if (parts.length >= 2) {
-      return `${parts.reverse().join('.')}.desktop`;
-    }
+    if (parts.length >= 2) return `${parts.reverse().join('.')}.desktop`;
   } catch {
-    // Fall through to the deterministic fallback.
+    // Use the deterministic fallback below.
   }
-
   return `app.${brandId}.desktop`;
 }
 
-function loadConfig(path: string): BrandConfig {
-  const input = JSON.parse(readFileSync(path, 'utf8')) as BrandInput;
-  const brandId = input.brandId?.trim();
-  const logo = input.logo ? resolve(input.logo) : undefined;
+function normalizeWebsite(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined;
+  const url = new URL(
+    value.includes('://') ? value.trim() : `https://${value.trim()}`,
+  );
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    !url.hostname ||
+    url.username ||
+    url.password
+  ) {
+    throw new Error('website must be an HTTP(S) URL without credentials');
+  }
+  return url.toString();
+}
 
+function validateText(name: string, value: string, maxLength: number): string {
+  if (!value || value.length > maxLength || /[\0\r\n]/.test(value)) {
+    throw new Error(`${name} must be 1-${maxLength} characters on one line`);
+  }
+  return value;
+}
+
+function loadConfig(file: string): BrandConfig {
+  const input = JSON.parse(readFileSync(file, 'utf8')) as BrandInput;
+  const brandId = input.brandId?.trim();
+  const logo = input.logo ? resolve(input.logo) : '';
   if (!brandId || !BRAND_ID_RE.test(brandId)) {
     throw new Error(`brandId must match ${BRAND_ID_RE}`);
   }
-  if (!logo || !existsSync(logo)) {
-    throw new Error(`Logo file not found: ${logo ?? '(missing)'}`);
+  if (!existsSync(logo)) {
+    throw new Error(`Logo file not found: ${logo || '(missing)'}`);
   }
-
   const words = titleWords(brandId);
-  const appName = input.appName?.trim() || words.join(' ');
-  const artifactPrefix = input.artifactPrefix?.trim() || words.join('-');
-
+  const website = normalizeWebsite(input.website);
+  const appName = validateText(
+    'appName',
+    input.appName?.trim() || words.join(' '),
+    80,
+  );
+  if (!/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(appName)) {
+    throw new Error('appName may contain only letters, digits, spaces, ._-');
+  }
+  const appId = input.appId?.trim() || deriveAppId(website, brandId);
+  if (!/^[A-Za-z0-9.-]+$/.test(appId) || !appId.includes('.')) {
+    throw new Error(`Invalid Tauri appId: ${appId}`);
+  }
   return {
     brandId,
     logo,
-    website: input.website?.trim() || undefined,
+    website,
     appName,
-    appId: input.appId?.trim() || deriveAppId(input.website, brandId),
-    artifactPrefix,
-    copyright:
+    appId,
+    copyright: validateText(
+      'copyright',
       input.copyright?.trim() ||
-      `Copyright \u00a9 ${new Date().getFullYear()} ${appName}`,
+        `Copyright © ${new Date().getFullYear()} ${appName}`,
+      200,
+    ),
   };
 }
 
-async function run(cmd: string[], cwd: string): Promise<void> {
-  const proc = Bun.spawn({
-    cmd,
-    cwd,
-    stdout: 'inherit',
-    stderr: 'inherit',
-    stdin: 'inherit',
-  });
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    throw new Error(`${cmd.join(' ')} failed with exit code ${exitCode}`);
-  }
+function run(command: [string, ...string[]], cwd: string): void {
+  execFileSync(command[0], command.slice(1), { cwd, stdio: 'inherit' });
 }
 
-interface BrandAssetsResult {
-  macIcon: string;
-  hasAssetsCar: boolean;
-}
-
-async function writeBrandAssets(
-  config: BrandConfig,
-  desktopRoot: string,
-): Promise<BrandAssetsResult> {
-  const requireFromDesktop = createRequire(join(desktopRoot, 'package.json'));
-  const sharp = requireFromDesktop('sharp') as typeof import('sharp');
-  const electronDir = join(desktopRoot, 'apps', 'electron');
-  const brandDir = join(electronDir, 'resources', 'brands', config.brandId);
-  mkdirSync(brandDir, { recursive: true });
-
-  async function writePng(output: string, size: number) {
-    await sharp(config.logo)
-      .resize(size, size, {
-        fit: 'contain',
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-      })
-      .png()
-      .toFile(output);
-  }
-
-  const sourceExt = extname(config.logo) || '.logo';
-  copyFileSync(config.logo, join(brandDir, `source${sourceExt}`));
-
-  await writePng(join(brandDir, 'icon.png'), 512);
-  await writePng(join(brandDir, 'dock.png'), 512);
-  await writePng(join(brandDir, 'symbol.png'), 512);
-
-  if (process.platform !== 'darwin') return { macIcon: 'icon.png', hasAssetsCar: false };
-
-  const iconset = join(brandDir, 'icon.iconset');
-  rmSync(iconset, { recursive: true, force: true });
-  mkdirSync(iconset, { recursive: true });
-
-  const sizes = [
-    ['icon_16x16.png', 16],
-    ['icon_16x16@2x.png', 32],
-    ['icon_32x32.png', 32],
-    ['icon_32x32@2x.png', 64],
-    ['icon_128x128.png', 128],
-    ['icon_128x128@2x.png', 256],
-    ['icon_256x256.png', 256],
-    ['icon_256x256@2x.png', 512],
-    ['icon_512x512.png', 512],
-    ['icon_512x512@2x.png', 1024],
-  ] as const;
-
-  for (const [file, size] of sizes) {
-    await writePng(join(iconset, file), size);
-  }
-
-  await run(
-    ['iconutil', '-c', 'icns', iconset, '-o', join(brandDir, 'icon.icns')],
-    brandDir,
-  );
-
-  const hasAssetsCar = await compileAssetsCar(config, brandDir, writePng);
-  return { macIcon: 'icon.icns', hasAssetsCar };
-}
-
-async function compileAssetsCar(
-  config: BrandConfig,
-  brandDir: string,
-  writePng: (output: string, size: number) => Promise<void>,
-): Promise<boolean> {
-  const xcassets = join(brandDir, 'Assets.xcassets');
-  const appiconset = join(xcassets, 'AppIcon.appiconset');
-  rmSync(xcassets, { recursive: true, force: true });
-  mkdirSync(appiconset, { recursive: true });
-
+function replaceVisibleText(file: string, appName: string): void {
+  if (!existsSync(file)) return;
   writeFileSync(
-    join(xcassets, 'Contents.json'),
-    JSON.stringify({ info: { author: 'xcode', version: 1 } }),
+    file,
+    readFileSync(file, 'utf8').replaceAll('OpenWork', appName),
   );
+}
 
-  const entries = [
-    { file: 'icon_16.png', size: 16, scale: '1x', dims: '16x16' },
-    { file: 'icon_32.png', size: 32, scale: '2x', dims: '16x16' },
-    { file: 'icon_32.png', size: 32, scale: '1x', dims: '32x32' },
-    { file: 'icon_64.png', size: 64, scale: '2x', dims: '32x32' },
-    { file: 'icon_128.png', size: 128, scale: '1x', dims: '128x128' },
-    { file: 'icon_256.png', size: 256, scale: '2x', dims: '128x128' },
-    { file: 'icon_256.png', size: 256, scale: '1x', dims: '256x256' },
-    { file: 'icon_512.png', size: 512, scale: '2x', dims: '256x256' },
-    { file: 'icon_512.png', size: 512, scale: '1x', dims: '512x512' },
-    { file: 'icon_1024.png', size: 1024, scale: '2x', dims: '512x512' },
-  ];
-
-  const uniqueSizes = new Set(entries.map((e) => e.size));
-  for (const size of uniqueSizes) {
-    await writePng(join(appiconset, `icon_${size}.png`), size);
-  }
-
+function replaceQuotedText(file: string, appName: string): void {
+  const source = readFileSync(file, 'utf8');
   writeFileSync(
-    join(appiconset, 'Contents.json'),
-    JSON.stringify({
-      images: entries.map((e) => ({
-        filename: e.file,
-        idiom: 'mac',
-        scale: e.scale,
-        size: e.dims,
-      })),
-      info: { author: 'xcode', version: 1 },
-    }),
+    file,
+    source.replace(/"(?:[^"\\]|\\.)*"/g, (value) =>
+      value.replaceAll('OpenWork', appName),
+    ),
   );
-
-  const outDir = mkdtempSync(join(tmpdir(), 'assets-car-'));
-  const partialPlist = join(outDir, 'partial-info.plist');
-  const proc = Bun.spawn({
-    cmd: [
-      'xcrun', 'actool', xcassets,
-      '--compile', outDir,
-      '--app-icon', 'AppIcon',
-      '--platform', 'macosx',
-      '--minimum-deployment-target', '14.0',
-      '--output-partial-info-plist', partialPlist,
-    ],
-    cwd: brandDir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) {
-    console.log('Warning: actool compilation failed, skipping Assets.car');
-    rmSync(xcassets, { recursive: true, force: true });
-    return false;
-  }
-
-  const compiledCar = join(outDir, 'Assets.car');
-  if (!existsSync(compiledCar)) {
-    console.log('Warning: actool produced no Assets.car, skipping');
-    rmSync(xcassets, { recursive: true, force: true });
-    return false;
-  }
-
-  copyFileSync(compiledCar, join(brandDir, 'Assets.car'));
-  rmSync(xcassets, { recursive: true, force: true });
-  rmSync(outDir, { recursive: true, force: true });
-  console.log('Assets.car compiled successfully');
-  return true;
 }
 
-function tsString(value: string): string {
-  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
-}
-
-function helpMenuLinks(config: BrandConfig): string {
-  if (!config.website) return '[]';
-
-  return `[
-      {
-        labelKey: 'menu.homepage',
-        url: ${tsString(config.website)},
-        icon: 'House',
-      },
-    ]`;
-}
-
-function brandBlock(config: BrandConfig, macIcon: string, hasAssetsCar: boolean): string {
-  const resourceDir = `resources/brands/${config.brandId}`;
-  const liquidGlassLine = hasAssetsCar
-    ? `\n      liquidGlassAssetsCar: ${tsString(`${resourceDir}/Assets.car`)},`
-    : '';
-
-  return `  ${tsString(config.brandId)}: {
-    id: ${tsString(config.brandId)},
-    appName: ${tsString(config.appName)},
-    appId: ${tsString(config.appId)},
-    productName: ${tsString(config.appName)},
-    artifactPrefix: ${tsString(config.artifactPrefix)},
-    copyright: ${tsString(config.copyright)},
-    coAuthorLine: ${tsString(`Co-Authored-By: ${config.appName} <noreply@${config.brandId}.local>`)},
-    selfReferName: ${tsString(config.appName)},
-    viewerUrl: 'https://agents.craft.do',
-    helpMenuLinks: ${helpMenuLinks(config)},
-    assets: {
-      resourceDir: ${tsString(resourceDir)},
-      rendererSymbol: ${tsString(`${resourceDir}/symbol.png`)},
-      macIcon: ${tsString(`${resourceDir}/${macIcon}`)},
-      winIcon: ${tsString(`${resourceDir}/icon.png`)},
-      linuxIcon: ${tsString(`${resourceDir}/icon.png`)},
-      devDockIcon: ${tsString(`${resourceDir}/dock.png`)},${liquidGlassLine}
-    },
-    credits: '',
-    creditsShort: '',
-    creditsEntries: [],
-  },
-`;
-}
-
-function registerBrand(
-  config: BrandConfig,
-  desktopRoot: string,
-  macIcon: string,
-  hasAssetsCar: boolean,
-): void {
-  const brandingPath = join(
-    desktopRoot,
-    'packages',
-    'shared',
-    'src',
-    'branding.ts',
-  );
-  const source = readFileSync(brandingPath, 'utf8');
-  if (
-    source.includes(`${tsString(config.brandId)}:`) ||
-    source.includes(`id: ${tsString(config.brandId)}`)
-  ) {
-    throw new Error(`Brand already exists in branding.ts: ${config.brandId}`);
+function replaceRequired(
+  source: string,
+  from: string,
+  to: string,
+  file: string,
+): string {
+  if (!source.includes(from)) {
+    throw new Error(`Could not find ${JSON.stringify(from)} in ${file}`);
   }
-
-  const marker = '\n};\n\n/** Active brand';
-  if (!source.includes(marker)) {
-    throw new Error(`Could not find BRANDS insertion point in ${brandingPath}`);
-  }
-
-  writeFileSync(
-    brandingPath,
-    source.replace(marker, `\n${brandBlock(config, macIcon, hasAssetsCar)}${marker}`),
-  );
+  return source.replaceAll(from, to);
 }
 
 async function main(): Promise<void> {
-  const desktopRoot = desktopRootFromArgs();
-  const config = loadConfig(configPathFromArgs());
-  const { macIcon, hasAssetsCar } = await writeBrandAssets(config, desktopRoot);
-  registerBrand(config, desktopRoot, macIcon, hasAssetsCar);
+  const desktopRoot = requiredPath('--desktop-root');
+  const packageFile = join(desktopRoot, 'package.json');
+  if (!existsSync(packageFile)) {
+    throw new Error(`Tauri desktop package not found: ${desktopRoot}`);
+  }
+  const config = loadConfig(requiredPath('--config'));
+  const repoRoot = resolve(desktopRoot, '../..');
+  const requireFromRepo = createRequire(join(repoRoot, 'package.json'));
+  const sharp = requireFromRepo('sharp') as typeof import('sharp');
+  const symbol = join(desktopRoot, 'bootstrap', 'openwork-symbol.png');
+  await sharp(config.logo)
+    .resize(512, 512, {
+      fit: 'contain',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
+    .png()
+    .toFile(symbol);
+  run(
+    [
+      'npx',
+      'tauri',
+      'icon',
+      symbol,
+      '--output',
+      join(desktopRoot, 'src-tauri', 'icons'),
+    ],
+    desktopRoot,
+  );
 
-  console.log(`Created brand ${config.brandId}`);
+  const tauriConfigPath = join(desktopRoot, 'src-tauri', 'tauri.conf.json');
+  const tauriConfig = JSON.parse(readFileSync(tauriConfigPath, 'utf8'));
+  tauriConfig.productName = config.appName;
+  tauriConfig.identifier = config.appId;
+  tauriConfig.bundle.shortDescription = `${config.appName} — AI agent workspace`;
+  tauriConfig.bundle.copyright = config.copyright;
+  tauriConfig.plugins['deep-link'].desktop.schemes = [config.brandId];
+  tauriConfig.plugins.updater.endpoints = [];
+  writeFileSync(tauriConfigPath, `${JSON.stringify(tauriConfig, null, 2)}\n`);
+
+  for (const file of [
+    join(desktopRoot, 'bootstrap', 'index.html'),
+    join(desktopRoot, 'bootstrap', 'bootstrap.js'),
+    join(desktopRoot, 'bootstrap', 'local-control.html'),
+    join(desktopRoot, 'bootstrap', 'pet.html'),
+    join(desktopRoot, 'src-tauri', 'Info.plist'),
+    join(desktopRoot, 'src-tauri', 'windows-app-manifest.xml'),
+    join(repoRoot, 'packages', 'web-shell', 'client', 'index.html'),
+    join(repoRoot, 'packages', 'web-shell', 'client', 'i18n.tsx'),
+  ]) {
+    replaceVisibleText(file, config.appName);
+  }
+
+  const rustMain = join(desktopRoot, 'src-tauri', 'src', 'main.rs');
+  replaceQuotedText(rustMain, config.appName);
+  let rustSource = replaceRequired(
+    readFileSync(rustMain, 'utf8'),
+    'openwork://',
+    `${config.brandId}://`,
+    rustMain,
+  );
+  if (config.website) {
+    rustSource = rustSource.replaceAll(
+      'https://github.com/modelstudioai/openwork',
+      config.website,
+    );
+  }
+  rustSource = replaceRequired(
+    rustSource,
+    'url.scheme() != "openwork"',
+    `url.scheme() != "${config.brandId}"`,
+    rustMain,
+  );
+  writeFileSync(rustMain, rustSource);
+
+  const desktopLayer = join(
+    repoRoot,
+    'packages',
+    'web-shell',
+    'client',
+    'openwork',
+    'OpenWorkDesktopLayer.tsx',
+  );
+  let desktopSource = readFileSync(desktopLayer, 'utf8');
+  desktopSource = replaceRequired(
+    desktopSource,
+    "url.protocol !== 'openwork:'",
+    `url.protocol !== '${config.brandId}:'`,
+    desktopLayer,
+  );
+  desktopSource = replaceRequired(
+    desktopSource,
+    "title: 'OpenWork'",
+    `title: ${JSON.stringify(config.appName)}`,
+    desktopLayer,
+  );
+  writeFileSync(desktopLayer, desktopSource);
+
+  console.log(`Created Tauri brand ${config.brandId}`);
   console.log(`App name: ${config.appName}`);
   console.log(`App ID: ${config.appId}`);
-  console.log(
-    `Assets: ${join(desktopRoot, 'apps', 'electron', 'resources', 'brands', config.brandId)}`,
-  );
-  if (hasAssetsCar) {
-    console.log('Assets.car: generated (macOS 26+ Liquid Glass icon)');
-  }
+  console.log(`Desktop root: ${desktopRoot}`);
 }
 
 main().catch((error: unknown) => {

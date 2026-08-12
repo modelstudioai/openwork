@@ -45,6 +45,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const { t } = useI18n();
   const { renderAssistantTurnFooter } = useWebShellCustomization();
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
   const showFooter = !!content && !isStreaming && showFooterActions;
   const customFooter = useMemo(
     () =>
@@ -56,14 +57,20 @@ export const AssistantMessage = memo(function AssistantMessage({
   const handleCopy = useCallback(() => {
     const write = navigator.clipboard?.writeText(content);
     if (!write) {
+      setCopyFailed(true);
       return;
     }
     void write
       .then(() => {
+        setCopyFailed(false);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 2000);
       })
-      .catch(() => {});
+      .catch(() => {
+        setCopied(false);
+        setCopyFailed(true);
+        window.setTimeout(() => setCopyFailed(false), 2000);
+      });
   }, [content]);
   return (
     <div className={styles.message}>
@@ -90,12 +97,21 @@ export const AssistantMessage = memo(function AssistantMessage({
           <button
             type="button"
             className={styles.copyButton}
-            title={t('assistant.copy')}
-            aria-label={t('assistant.copy')}
+            title={copyFailed ? t('assistant.copyFailed') : t('assistant.copy')}
+            aria-label={
+              copyFailed ? t('assistant.copyFailed') : t('assistant.copy')
+            }
             onClick={handleCopy}
           >
             {copied ? <CheckIcon /> : <CopyIcon />}
           </button>
+          <span className="sr-only" role="status" aria-live="polite">
+            {copied
+              ? t('assistant.copied')
+              : copyFailed
+                ? t('assistant.copyFailed')
+                : ''}
+          </span>
           {showBranchAction && onBranchSession && (
             <button
               type="button"

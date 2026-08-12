@@ -620,8 +620,14 @@ export interface WebShellApi {
   openSessionDrawer: () => void;
   /** Start a new session using the same lifecycle as the built-in New Chat action. */
   createNewSession: () => Promise<boolean>;
+  /** Start and attach a new session in Qwen Code's managed Git worktree. */
+  createWorktreeSession: (slug?: string) => Promise<boolean>;
   /** Open the right panel with a new side-task draft. */
   createSideTask: () => boolean;
+  openSettings: () => void;
+  openSkills: () => void;
+  openChannels: () => void;
+  openShortcuts: () => void;
 }
 
 export type WebShellComposerPlaceholderState = ComposerPlaceholderState;
@@ -658,7 +664,7 @@ export interface WebShellProps {
   /** Called when `/theme` changes the web-shell theme. */
   onThemeChange?: (theme: WebShellTheme) => void;
   /** UI language for the web-shell. Defaults to `?language=` or browser language. */
-  language?: 'en' | 'zh-CN' | 'zh' | 'zh-cn';
+  language?: WebShellLanguage | 'zh' | 'zh-cn';
   /** Called when `/language ui` changes the web-shell UI language. */
   onLanguageChange?: (language: WebShellLanguage) => void;
   /** Additional CSS class name appended to the root element. */
@@ -667,7 +673,7 @@ export interface WebShellProps {
   style?: React.CSSProperties;
   /** Optional Shadow DOM isolation for plugin content and/or all portals. */
   shadowDom?: WebShellShadowDom;
-  /** Maximum chat content width in regular mode. Defaults to 1000px. */
+  /** Maximum chat content width in regular mode. Defaults to 1100px. */
   chatMaxWidth?: number;
   /** Optional workspace sidebar. Disabled by default. */
   sidebar?: boolean | WebShellSidebarOptions;
@@ -851,7 +857,7 @@ const emptyComposerApi: WebShellComposerApi = {
 };
 
 const EMPTY_BOTTOM_STATUS_ITEMS: readonly WebShellBottomStatusItem[] = [];
-const DEFAULT_CHAT_MAX_WIDTH = 1000;
+const DEFAULT_CHAT_MAX_WIDTH = 1100;
 const DEFAULT_CHAT_HEADER_ITEMS: readonly WebShellChatHeaderItem[] = [
   'title',
   'environment',
@@ -875,9 +881,11 @@ function imageTabId(src: string): string {
   }
   return `image:${hash.toString(36)}`;
 }
-type ChatWidthMode = `${typeof DEFAULT_CHAT_MAX_WIDTH}` | 'wide';
+type ChatWidthMode = '840' | '1100' | 'wide';
 
 const CHAT_WIDTH_STORAGE_KEY = 'qwen-code-web-shell-chat-width';
+const OPENWORK_CLIENT_STATE_EVENT = 'openwork:client-state-changed';
+const OPENWORK_HYDRATE_SHELL_EVENT = 'openwork:hydrate-shell-preferences';
 const CHAT_SHELL_HORIZONTAL_PADDING = 40;
 const SIDEBAR_COLLAPSED_STORAGE_KEY = 'qwen-code-web-shell-sidebar-collapsed';
 
@@ -941,8 +949,9 @@ function getDefaultChatWidthMode(): ChatWidthMode {
 function readChatWidthMode(): ChatWidthMode {
   if (typeof window === 'undefined') return getDefaultChatWidthMode();
   try {
-    return window.localStorage.getItem(CHAT_WIDTH_STORAGE_KEY) === 'wide'
-      ? 'wide'
+    const value = window.localStorage.getItem(CHAT_WIDTH_STORAGE_KEY);
+    return value === '840' || value === '1100' || value === 'wide'
+      ? value
       : getDefaultChatWidthMode();
   } catch {
     return getDefaultChatWidthMode();
@@ -955,6 +964,7 @@ function writeChatWidthMode(mode: ChatWidthMode): void {
   } catch {
     // localStorage can be unavailable in private or embedded contexts.
   }
+  window.dispatchEvent(new Event(OPENWORK_CLIENT_STATE_EVENT));
 }
 
 function getChatMaxWidth(value: number | undefined): number {
@@ -967,7 +977,11 @@ function getChatWidthStyle(
   mode: ChatWidthMode,
   chatMaxWidth: number | undefined,
 ): CSSProperties {
-  const contentWidth = `${getChatMaxWidth(chatMaxWidth)}px`;
+  const width =
+    chatMaxWidth === undefined
+      ? Number(mode === 'wide' ? DEFAULT_CHAT_MAX_WIDTH : mode)
+      : getChatMaxWidth(chatMaxWidth);
+  const contentWidth = `${width}px`;
   const shellWidth = `calc(${contentWidth} + ${CHAT_SHELL_HORIZONTAL_PADDING}px)`;
   return {
     '--chat-regular-content-width': contentWidth,
@@ -1649,6 +1663,18 @@ export function App({
 }: AppProps = {}) {
   const [chatWidthMode, setChatWidthMode] =
     useState<ChatWidthMode>(readChatWidthMode);
+  useEffect(() => {
+    const handleHydration = (event: Event) => {
+      const value = (event as CustomEvent<{ chatWidth?: unknown }>).detail
+        ?.chatWidth;
+      if (value === '840' || value === '1100' || value === 'wide') {
+        setChatWidthMode(value);
+      }
+    };
+    window.addEventListener(OPENWORK_HYDRATE_SHELL_EVENT, handleHydration);
+    return () =>
+      window.removeEventListener(OPENWORK_HYDRATE_SHELL_EVENT, handleHydration);
+  }, []);
   const [selectedLanguage, setSelectedLanguage] = useState<WebShellLanguage>(
     () =>
       providedLanguage === undefined
@@ -7270,15 +7296,34 @@ export function App({
       },
       openSessionDrawer,
       createNewSession: () => createNewSession(),
+      createWorktreeSession: async (slug) => {
+        if (!(await createNewSession())) return false;
+        const intent: SessionGitIntent = { mode: 'worktree', slug };
+        gitModeIntentRef.current = intent;
+        setGitModeIntent(intent);
+        try {
+          return Boolean(await ensureSessionForPrompt());
+        } catch (error) {
+          reportError(error, 'Failed to create worktree session');
+          return false;
+        }
+      },
       createSideTask,
+      openSettings: () => openPanel('settings'),
+      openSkills: () => openPanel('skills'),
+      openChannels: () => openPanel('channels'),
+      openShortcuts: handleToggleShortcuts,
     }),
     [
       closeMobileDrawer,
       createNewSession,
       createSideTask,
+      ensureSessionForPrompt,
+      handleToggleShortcuts,
       openPanel,
       openSessionDrawer,
       requestOpenSplitView,
+      reportError,
     ],
   );
   useEffect(() => {

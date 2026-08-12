@@ -20,6 +20,10 @@ const runtimeDir = path.join(packageDir, 'runtime');
 const packageRoot = path.join(runtimeDir, 'openwork');
 const libDir = path.join(packageRoot, 'lib');
 const nodeDir = path.join(packageRoot, 'node');
+const toolsDir = path.join(packageRoot, 'tools');
+const toolsBinDir = path.join(toolsDir, 'bin');
+const toolsScriptsDir = path.join(toolsDir, 'scripts');
+const uvVersion = '0.10.6';
 const qwenCodeVersion = JSON.parse(
   fs.readFileSync(path.join(sourceRoot, 'package.json'), 'utf8'),
 ).version;
@@ -84,6 +88,8 @@ fs.writeFileSync(path.join(packageRoot, '.gitkeep'), '');
 fs.mkdirSync(binDir, { recursive: true });
 copyDirectory(distDir, libDir);
 await installNodeRuntime(nodeDir, target);
+copyDocumentTools();
+await installUvRuntime(path.join(toolsDir, 'uv'), target);
 writeLaunchers(target);
 copyRequiredFile(
   path.join(sourceRoot, 'LICENSE'),
@@ -107,6 +113,7 @@ fs.writeFileSync(
       qwenCodeCommit: process.env.QWEN_CODE_COMMIT || gitCommit(sourceRoot),
       target,
       node: `v${process.versions.node}`,
+      uv: uvVersion,
       builtAt: new Date().toISOString(),
     },
     null,
@@ -142,7 +149,7 @@ async function installNodeRuntime(destination, desktopTarget) {
       archiveName,
       fs.readFileSync(checksumsPath, 'utf8'),
     );
-    extractNodeArchive(archivePath, temporaryRoot);
+    extractArchive(archivePath, temporaryRoot);
     const extractedRoot = path.join(
       temporaryRoot,
       archiveName.replace(/\.(tar\.gz|tar\.xz|zip)$/, ''),
@@ -151,6 +158,77 @@ async function installNodeRuntime(destination, desktopTarget) {
       throw new Error(`Extracted Node runtime is missing: ${extractedRoot}`);
     }
     copyDirectory(extractedRoot, destination);
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+function copyDocumentTools() {
+  const resources = path.join(
+    sourceRoot,
+    'packages',
+    'desktop',
+    'apps',
+    'electron',
+    'resources',
+  );
+  copyDirectory(path.join(resources, 'scripts'), toolsScriptsDir);
+  copyRequiredFile(
+    path.join(packageDir, 'migration', 'openwork-migrate.mjs'),
+    path.join(toolsDir, 'openwork-migrate.mjs'),
+  );
+  fs.mkdirSync(toolsBinDir, { recursive: true });
+  for (const name of [
+    'doc-diff',
+    'docx-tool',
+    'ical-tool',
+    'img-tool',
+    'markitdown',
+    'pdf-tool',
+    'pptx-tool',
+    'xlsx-tool',
+  ]) {
+    for (const suffix of ['', '.cmd']) {
+      const destination = path.join(toolsBinDir, `${name}${suffix}`);
+      copyRequiredFile(
+        path.join(resources, 'bin', `${name}${suffix}`),
+        destination,
+      );
+      if (!suffix && target !== 'win32-x64') fs.chmodSync(destination, 0o755);
+    }
+  }
+}
+
+async function installUvRuntime(destination, desktopTarget) {
+  const archiveName = uvArchiveName(desktopTarget);
+  const downloadRoot =
+    process.env.OPENWORK_UV_DOWNLOAD_ROOT?.trim() ||
+    `https://github.com/astral-sh/uv/releases/download/${uvVersion}`;
+  const temporaryRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'openwork-desktop-uv-'),
+  );
+  try {
+    const archivePath = path.join(temporaryRoot, archiveName);
+    const checksumsPath = path.join(temporaryRoot, `${archiveName}.sha256`);
+    const extractDir = path.join(temporaryRoot, 'extract');
+    await download(`${downloadRoot}/${archiveName}`, archivePath);
+    await download(`${downloadRoot}/${archiveName}.sha256`, checksumsPath);
+    verifyChecksum(
+      archivePath,
+      archiveName,
+      fs.readFileSync(checksumsPath, 'utf8'),
+    );
+    fs.mkdirSync(extractDir);
+    extractArchive(archivePath, extractDir);
+    const binaryName = desktopTarget === 'win32-x64' ? 'uv.exe' : 'uv';
+    const binary = findFile(extractDir, binaryName);
+    if (!binary)
+      throw new Error(`Extracted uv runtime is missing ${binaryName}`);
+    fs.mkdirSync(destination, { recursive: true });
+    fs.copyFileSync(binary, path.join(destination, binaryName));
+    if (desktopTarget !== 'win32-x64') {
+      fs.chmodSync(path.join(destination, binaryName), 0o755);
+    }
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }
@@ -192,6 +270,16 @@ function nodeArchiveName(version, desktopTarget) {
   return `node-v${version}-${nodeTarget}.${extension}`;
 }
 
+function uvArchiveName(desktopTarget) {
+  return {
+    'darwin-arm64': 'uv-aarch64-apple-darwin.tar.gz',
+    'darwin-x64': 'uv-x86_64-apple-darwin.tar.gz',
+    'linux-arm64': 'uv-aarch64-unknown-linux-gnu.tar.gz',
+    'linux-x64': 'uv-x86_64-unknown-linux-gnu.tar.gz',
+    'win32-x64': 'uv-x86_64-pc-windows-msvc.zip',
+  }[desktopTarget];
+}
+
 async function download(url, destination) {
   const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
   if (!response.ok || !response.body) {
@@ -206,7 +294,7 @@ function verifyChecksum(archivePath, archiveName, checksums) {
     .map((line) => line.trim().split(/\s+/))
     .find(([, fileName]) => fileName === archiveName)?.[0];
   if (!expected) {
-    throw new Error(`Node checksums do not list ${archiveName}`);
+    throw new Error(`Checksums do not list ${archiveName}`);
   }
   const actual = crypto
     .createHash('sha256')
@@ -217,8 +305,20 @@ function verifyChecksum(archivePath, archiveName, checksums) {
   }
 }
 
-function extractNodeArchive(archivePath, destination) {
+function extractArchive(archivePath, destination) {
   execFileSync('tar', ['-xf', archivePath, '-C', destination]);
+}
+
+function findFile(directory, name) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const file = path.join(directory, entry.name);
+    if (entry.isFile() && entry.name === name) return file;
+    if (entry.isDirectory()) {
+      const nested = findFile(file, name);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
 }
 
 function writeLaunchers(desktopTarget) {

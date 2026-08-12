@@ -34,7 +34,7 @@ export const effortCommand: SlashCommand = {
   // (no tier auto-selected), while `/effort <tier>` still sets one directly. A
   // completion function would surface the tiers as submenu-like entries and let
   // Enter auto-pick the first one, which we don't want here.
-  argumentHint: '[low|medium|high|xhigh|max]',
+  argumentHint: '[default|low|medium|high|xhigh|max]',
   kind: CommandKind.BUILT_IN,
   supportedModes: ['interactive', 'non_interactive', 'acp'] as const,
   action: async (
@@ -76,8 +76,11 @@ export const effortCommand: SlashCommand = {
       };
     }
 
-    const tier = normalizeReasoningEffort(args);
-    if (!tier) {
+    const tier =
+      args.toLowerCase() === 'default'
+        ? undefined
+        : normalizeReasoningEffort(args);
+    if (tier === undefined && args.toLowerCase() !== 'default') {
       return {
         type: 'message',
         messageType: 'error',
@@ -99,11 +102,16 @@ export const effortCommand: SlashCommand = {
     // Apply at runtime (takes effect next turn) and persist for future sessions.
     // Provider adapters clamp the tier to what the active model supports.
     const applied = applyReasoningEffort(config, tier);
-    settings.setValue(
-      getPersistScopeForModelSelection(settings),
-      'model.reasoningEffort',
-      tier,
-    );
+    const scope = getPersistScopeForModelSelection(settings);
+    settings.setValue(scope, 'model.reasoningEffort', tier);
+
+    if (!tier) {
+      return {
+        type: 'message',
+        messageType: 'info',
+        content: t('Reasoning effort: model/provider default.'),
+      };
+    }
 
     // `setReasoningEffort` is a no-op when thinking is explicitly disabled
     // (`reasoning: false`), so effort cannot silently re-enable it. The tier is

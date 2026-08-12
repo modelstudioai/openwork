@@ -10,9 +10,14 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$HOME/.qwen/pets/**"]
+      },
       "capabilities": ["bootstrap"]
     }
   },
@@ -55,6 +60,19 @@
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico"
       }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["openwork"]
+      }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/modelstudioai/openwork/releases/latest/download/latest.json"
+      ],
+      "pubkey": ""
     }
   }
 }

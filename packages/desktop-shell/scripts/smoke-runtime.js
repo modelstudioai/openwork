@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -129,6 +129,9 @@ function finish(error) {
 }
 
 function verifyRuntimeIntegrity() {
+  const uvRelative =
+    process.platform === 'win32' ? 'tools/uv/uv.exe' : 'tools/uv/uv';
+  const launcherSuffix = process.platform === 'win32' ? '.cmd' : '';
   const required = [
     'manifest.json',
     'checksums.json',
@@ -137,6 +140,19 @@ function verifyRuntimeIntegrity() {
     'node/LICENSE',
     'lib/cli-entry.js',
     'lib/web-shell/index.html',
+    uvRelative,
+    'tools/openwork-migrate.mjs',
+    'tools/scripts/img_tool.py',
+    ...[
+      'doc-diff',
+      'docx-tool',
+      'ical-tool',
+      'img-tool',
+      'markitdown',
+      'pdf-tool',
+      'pptx-tool',
+      'xlsx-tool',
+    ].map((name) => `tools/bin/${name}${launcherSuffix}`),
   ];
   for (const relative of required) {
     const file = path.join(runtimeRoot, relative);
@@ -153,6 +169,7 @@ function verifyRuntimeIntegrity() {
     'qwenCodeCommit',
     'target',
     'node',
+    'uv',
     'builtAt',
   ]) {
     if (!manifest[field]) {
@@ -175,4 +192,20 @@ function verifyRuntimeIntegrity() {
       throw new Error(`Bundled runtime checksum mismatch: ${relative}`);
     }
   }
+  const uv = path.join(runtimeRoot, uvRelative);
+  const version = execFileSync(uv, ['--version'], { encoding: 'utf8' });
+  if (!version.includes(manifest.uv)) {
+    throw new Error(`Bundled uv version mismatch: ${version.trim()}`);
+  }
+  execFileSync(
+    uv,
+    [
+      'run',
+      '--python',
+      '3.12',
+      path.join(runtimeRoot, 'tools', 'scripts', 'img_tool.py'),
+      '--help',
+    ],
+    { stdio: 'pipe', timeout: 180_000 },
+  );
 }

@@ -1,6 +1,6 @@
 ---
 name: desktop-develop
-description: Develop, debug, and verify the OpenWork desktop/Electron app with an agent-readable harness. Use when working on packages/desktop, Electron renderer/main/preload code, desktop UI bugs, local desktop runtime failures, Chrome DevTools MCP investigation, desktop logs, messaging gateway issues, or when improving the development feedback loop for desktop features.
+description: Develop, debug, and verify the OpenWork Tauri desktop shell and its daemon-served Qwen Web Shell with an agent-readable harness.
 ---
 
 # Desktop Development Harness
@@ -19,30 +19,28 @@ workflow, observability, docs, tests, or agent-facing harness itself.
 
 For bug reports, UI failures, hangs, startup problems, messaging issues, or
 anything involving the running desktop app, inspect the runtime logs directly.
-Important paths:
+Important paths on macOS:
 
-- `~/Library/Logs/@craft-agent/electron/main.log`
-- `~/Library/Logs/@craft-agent/electron/main.old.log`
-- `~/.craft-agent/logs/messaging-gateway.log`
+- `~/Library/Logs/com.alibaba.openwork/desktop-runtime.log`
+- `~/.qwen/` for Qwen runtime state and transcripts
 
 Search logs before guessing:
 
 ```bash
-rg -n "error|warn|failed|exception|crash|Unhandled|rejection|browser-cdp|messaging-gateway" \
-  "$HOME/Library/Logs/@craft-agent/electron/main.log" \
-  "$HOME/.craft-agent/logs/messaging-gateway.log"
+rg -n "error|warn|failed|exception|crash|Unhandled|rejection" \
+  "$HOME/Library/Logs/com.alibaba.openwork/desktop-runtime.log"
 ```
 
 ## Harness Loop
 
-1. **Map the surface.** Identify whether the task touches Electron main,
-   preload, renderer, shared desktop packages, server, messaging, or browser
-   CDP. Read nearby code and tests before editing.
+1. **Map the surface.** Identify whether the task touches Tauri Rust,
+   bootstrap assets, Web Shell, bundled runtime, channels, or the browser
+   child webview. Read nearby code and tests before editing.
 2. **Collect live evidence.** Read and tail the relevant log while reproducing.
    Treat missing or ambiguous logs as part of the bug.
-3. **Drive the UI.** Use Chrome DevTools MCP when a browser/renderer page is
-   involved: `list_pages`, `select_page`, `take_snapshot`, then console/network
-   inspection. Prefer accessibility snapshots over screenshots for reasoning.
+3. **Drive the UI.** Inspect the daemon-served Web Shell in a browser for DOM,
+   accessibility, console, and network evidence; verify native behavior in the
+   Tauri app and runtime log.
 4. **Reproduce first.** For bugs, capture the exact observed behavior and the
    evidence that proves it. If reproduction differs from the user's report,
    compare environment, app state, build artifact, account, timing, and logs.
@@ -57,50 +55,34 @@ rg -n "error|warn|failed|exception|crash|Unhandled|rejection|browser-cdp|messagi
 
 ## Running Desktop
 
-Use desktop-specific commands from `packages/desktop`:
+Use desktop-specific commands from `packages/desktop-shell`:
 
 ```bash
-cd packages/desktop
-bun run electron:dev
-bun run electron:dev:terminal
-bun run electron:dev:logs
+cd packages/desktop-shell
+npm install --workspaces=false
+npm run build:runtime --workspaces=false
+npm run dev --workspaces=false
 ```
 
-Use `electron:dev:terminal` when the bug involves process output, startup, or
-shutdown. Use `electron:dev:logs` when the app is already running and you need a
-live log tail.
+Reuse the prepared runtime on later runs. Set
+`OPENWORK_DESKTOP_WORKSPACE=/absolute/path` for an isolated workspace.
 
-## Chrome DevTools MCP
+## Web Shell inspection
 
-If DevTools tools are not loaded, search for `chrome-devtools` tools first.
-Then:
-
-1. Call `mcp__chrome_devtools.list_pages`.
-2. Select the relevant page with `mcp__chrome_devtools.select_page`.
-3. Capture an accessibility snapshot with
-   `mcp__chrome_devtools.take_snapshot`.
-4. Inspect runtime failures with
-   `mcp__chrome_devtools.list_console_messages`, then
-   `mcp__chrome_devtools.get_console_message` for important entries.
-5. Inspect selected network requests with
-   `mcp__chrome_devtools.get_network_request` when network state is involved.
-6. For memory issues, save a heap snapshot with
-   `mcp__chrome_devtools.take_heapsnapshot` and keep it under `.qwen/` or
-   `/tmp`, not in source directories.
-
-Always take a fresh snapshot after each UI-changing action. Do not rely on stale
-element ids or old console state.
+Run `npm run smoke:runtime --workspaces=false` to launch and probe the bundled
+loopback runtime. Use `npm run dev --workspaces=false` for native behavior; do
+not substitute the retired Electron renderer.
 
 ## Focused Verification
 
 Choose the narrowest checks that cover the touched surface:
 
 ```bash
-cd packages/desktop && bun run typecheck:electron
-cd packages/desktop && bun run typecheck:all
-cd packages/desktop && bun run validate:dev
-cd packages/desktop/apps/electron && bun run lint
-cd packages/desktop/packages/shared && bun test path/to/file.test.ts
+cd packages/desktop-shell && npm test --workspaces=false
+cd packages/desktop-shell && npm run test:migration --workspaces=false
+cd packages/desktop-shell && npm run test:release --workspaces=false
+cd packages/desktop-shell && npm run smoke:runtime --workspaces=false
+npm run typecheck --workspace=packages/web-shell
 ```
 
 For root CLI/core changes, use the root repository commands from `AGENTS.md`
