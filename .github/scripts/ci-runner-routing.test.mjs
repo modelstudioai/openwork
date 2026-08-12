@@ -1,4 +1,4 @@
-// Runner-routing regression guards for ci.yml and serve-ab.yml.
+// Runner-routing regression guards for ci.yml.
 //
 // classify_pr carries the routing logic TWICE — the `runs-on` expression
 // (which selects the classify job's own runner) and the `pick_runner` shell
@@ -21,10 +21,6 @@ const workflowsDir = join(
   'workflows',
 );
 const ciDoc = parse(readFileSync(join(workflowsDir, 'ci.yml'), 'utf8'));
-const serveAbDoc = parse(
-  readFileSync(join(workflowsDir, 'serve-ab.yml'), 'utf8'),
-);
-
 const TRUSTED = ['OWNER', 'MEMBER', 'COLLABORATOR'];
 const ECS = '["self-hosted", "linux", "x64", "ecs-qwen"]';
 const HOSTED = '["ubuntu-latest"]';
@@ -38,16 +34,28 @@ const pickRunner = ciDoc.jobs.classify_pr.steps.find(
 // routing-relevant inputs: contains(list, '') is false, a missing
 // pull_request (merge_group / dispatch) yields '' for both head.repo and
 // author_association.
-function simulateRunsOn({ ecsDisabled, sameRepo, assoc, mergeGroup }) {
+function simulateRunsOn({
+  ecsDisabled,
+  sameRepo,
+  assoc,
+  mergeGroup,
+  qwenRepo = true,
+}) {
   const trusted = TRUSTED.includes(assoc);
-  const ecs =
-    !ecsDisabled && (sameRepo || trusted || mergeGroup);
+  const ecs = qwenRepo && !ecsDisabled && (sameRepo || trusted || mergeGroup);
   return ecs ? ECS : HOSTED;
 }
 
 // Executes the real pick_runner shell with the same inputs and returns the
 // selected runner exactly as CI would publish it.
-function runPickRunner({ ecsDisabled, sameRepo, assoc, eventName, dispatch }) {
+function runPickRunner({
+  ecsDisabled,
+  sameRepo,
+  assoc,
+  eventName,
+  dispatch,
+  qwenRepo = true,
+}) {
   const tmp = mkdtempSync(join(tmpdir(), 'pick-runner-'));
   const outputFile = join(tmp, 'github_output');
   const result = spawnSync('bash', ['-c', pickRunner.run], {
@@ -57,6 +65,9 @@ function runPickRunner({ ecsDisabled, sameRepo, assoc, eventName, dispatch }) {
       ECS_DISABLED: ecsDisabled ? 'true' : '',
       EVENT_NAME: eventName,
       DISPATCH_LINUX_RUNNER: dispatch ?? '',
+      GITHUB_REPOSITORY: qwenRepo
+        ? 'QwenLM/qwen-code'
+        : 'modelstudioai/openwork',
       GITHUB_OUTPUT: outputFile,
     },
     encoding: 'utf8',
@@ -162,6 +173,19 @@ describe('ci.yml classify_pr runner routing', () => {
     );
   });
 
+  it('uses hosted runners outside the QwenLM repository', () => {
+    assert.equal(
+      runPickRunner({
+        ecsDisabled: false,
+        sameRepo: true,
+        assoc: 'OWNER',
+        eventName: 'pull_request',
+        qwenRepo: false,
+      }),
+      HOSTED,
+    );
+  });
+
   it('the runs-on expression keeps the trusted clause and kill-switch', () => {
     // Structural pins for the expression half of the drift guard — the
     // simulation above re-implements it, so pin the real text too.
@@ -169,31 +193,11 @@ describe('ci.yml classify_pr runner routing', () => {
       classifyRunsOn,
       /contains\(fromJSON\('\["OWNER","MEMBER","COLLABORATOR"\]'\), github\.event\.pull_request\.author_association\)/,
     );
-    assert.match(classifyRunsOn, /vars\.MAINTAINER_ECS_RUNNER_DISABLED != 'true'/);
-    assert.match(classifyRunsOn, /github\.event_name == 'merge_group'/);
-  });
-});
-
-describe('serve-ab.yml runner routing', () => {
-  const runsOn = String(serveAbDoc.jobs.ab['runs-on']);
-
-  it('admits same-repo and write-access fork PRs, guarded by the kill-switch', () => {
-    assert.match(runsOn, /head\.repo\.full_name == github\.repository/);
     assert.match(
-      runsOn,
-      /contains\(fromJSON\('\["OWNER","MEMBER","COLLABORATOR"\]'\), github\.event\.pull_request\.author_association\)/,
+      classifyRunsOn,
+      /vars\.MAINTAINER_ECS_RUNNER_DISABLED != 'true'/,
     );
-    assert.match(runsOn, /vars\.MAINTAINER_ECS_RUNNER_DISABLED != 'true'/);
-    assert.match(runsOn, /ecs-qwen/);
-    assert.match(runsOn, /ubuntu-latest/);
-  });
-
-  it('wipes the reused workspace before checking out PR code', () => {
-    const wipe = serveAbDoc.jobs.ab.steps.find(
-      (s) => s.name === 'Wipe stale workspace before checkout',
-    );
-    assert.ok(wipe, 'self-hosted reuse must not bleed one PR into the next');
-    assert.equal(wipe.if, "${{ runner.environment == 'self-hosted' }}");
-    assert.match(wipe.run, /find "\$GITHUB_WORKSPACE" -mindepth 1 -maxdepth 1 -exec rm -rf/);
+    assert.match(classifyRunsOn, /github\.repository == 'QwenLM\/qwen-code'/);
+    assert.match(classifyRunsOn, /github\.event_name == 'merge_group'/);
   });
 });
