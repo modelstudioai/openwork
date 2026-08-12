@@ -106,7 +106,7 @@ function testReleaseWorkflow() {
     'APPLE_CERTIFICATE',
     'Import-PfxCertificate',
     'createUpdaterArtifacts: publish',
-    'uploadUpdaterJson: ${{ inputs.publish }}',
+    "uploadUpdaterJson: '${{ inputs.publish }}'",
   ]) {
     assert.ok(
       workflow.includes(expected),
@@ -118,12 +118,15 @@ function testReleaseWorkflow() {
   const dryRunJob = releaseWorkflow.slice(buildStart, publishStart);
   const publishJob = releaseWorkflow.slice(publishStart);
   assert.doesNotMatch(dryRunJob, /secrets/);
-  assert.match(dryRunJob, /if: inputs\.dry_run == true[\s\S]*contents: read/);
+  assert.match(
+    dryRunJob,
+    /if: '?inputs\.dry_run == true'?[\s\S]*contents: '?read'?/,
+  );
   assert.match(
     publishJob,
-    /if: inputs\.dry_run == false[\s\S]*contents: write/,
+    /if: '?inputs\.dry_run == false'?[\s\S]*contents: '?write'?/,
   );
-  assert.match(publishJob, /secrets: inherit/);
+  assert.match(publishJob, /secrets: '?inherit'?/);
   assert.doesNotMatch(workflow, /uses: [^\n]+@(v\d|stable)\b/);
   assert.doesNotMatch(workflow, /push --force|force-with-lease/);
 }

@@ -1,6 +1,6 @@
-name: Desktop Release
+name: 'Desktop Release'
 
-run-name: Desktop release ${{ inputs.version }}
+run-name: 'Desktop release ${{ inputs.version }}'
 
 on:
   workflow_dispatch:
@@ -8,52 +8,52 @@ on:
       version:
         description: 'Desktop semantic version, for example 0.2.0'
         required: true
-        type: string
+        type: 'string'
       release_name:
         description: 'Release title. Defaults to openwork-v<version>.'
         required: false
-        type: string
+        type: 'string'
       dry_run:
         description: 'Build installers without publishing a release.'
         required: true
         default: true
-        type: boolean
+        type: 'boolean'
       draft:
         description: 'Create a draft GitHub release.'
         required: true
         default: true
-        type: boolean
+        type: 'boolean'
       prerelease:
         description: 'Mark the GitHub release as a prerelease.'
         required: true
         default: false
-        type: boolean
+        type: 'boolean'
 
 permissions:
-  contents: read
+  contents: 'read'
 
 concurrency:
-  group: desktop-release-${{ inputs.version }}
+  group: 'desktop-release-${{ inputs.version }}'
   cancel-in-progress: false
 
 jobs:
   metadata:
-    name: Validate release
-    runs-on: ubuntu-latest
+    name: 'Validate release'
+    runs-on: 'ubuntu-latest'
     timeout-minutes: 5
     outputs:
-      release_name: ${{ steps.release.outputs.release_name }}
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.release.outputs.version }}
+      release_name: '${{ steps.release.outputs.release_name }}'
+      tag: '${{ steps.release.outputs.tag }}'
+      version: '${{ steps.release.outputs.version }}'
     steps:
-      - id: release
-        name: Validate version and source
-        shell: bash
+      - id: 'release'
+        name: 'Validate version and source'
+        shell: 'bash'
         env:
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_RELEASE_NAME: ${{ inputs.release_name }}
-          IS_DRY_RUN: ${{ inputs.dry_run }}
-          SOURCE_BRANCH: ${{ github.ref_name }}
+          INPUT_VERSION: '${{ inputs.version }}'
+          INPUT_RELEASE_NAME: '${{ inputs.release_name }}'
+          IS_DRY_RUN: '${{ inputs.dry_run }}'
+          SOURCE_BRANCH: '${{ github.ref_name }}'
         run: |
           set -euo pipefail
           version="${INPUT_VERSION#v}"
@@ -77,32 +77,32 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build installers
-    needs: metadata
-    if: inputs.dry_run == true
+    name: 'Build installers'
+    needs: 'metadata'
+    if: 'inputs.dry_run == true'
     permissions:
-      contents: read
-    uses: ./.github/workflows/desktop-build.yml
+      contents: 'read'
+    uses: './.github/workflows/desktop-build.yml'
     with:
-      version: ${{ needs.metadata.outputs.version }}
-      release_name: ${{ needs.metadata.outputs.release_name }}
-      tag: ${{ needs.metadata.outputs.tag }}
+      version: '${{ needs.metadata.outputs.version }}'
+      release_name: '${{ needs.metadata.outputs.release_name }}'
+      tag: '${{ needs.metadata.outputs.tag }}'
       publish: false
-      draft: ${{ inputs.draft }}
-      prerelease: ${{ inputs.prerelease }}
+      draft: '${{ inputs.draft }}'
+      prerelease: '${{ inputs.prerelease }}'
 
   publish:
-    name: Build and publish installers
-    needs: metadata
-    if: inputs.dry_run == false
+    name: 'Build and publish installers'
+    needs: 'metadata'
+    if: 'inputs.dry_run == false'
     permissions:
-      contents: write
-    uses: ./.github/workflows/desktop-build.yml
+      contents: 'write'
+    uses: './.github/workflows/desktop-build.yml'
     with:
-      version: ${{ needs.metadata.outputs.version }}
-      release_name: ${{ needs.metadata.outputs.release_name }}
-      tag: ${{ needs.metadata.outputs.tag }}
+      version: '${{ needs.metadata.outputs.version }}'
+      release_name: '${{ needs.metadata.outputs.release_name }}'
+      tag: '${{ needs.metadata.outputs.tag }}'
       publish: true
-      draft: ${{ inputs.draft }}
-      prerelease: ${{ inputs.prerelease }}
-    secrets: inherit
+      draft: '${{ inputs.draft }}'
+      prerelease: '${{ inputs.prerelease }}'
+    secrets: 'inherit'
