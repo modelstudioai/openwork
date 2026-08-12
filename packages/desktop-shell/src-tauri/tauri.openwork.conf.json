@@ -3,6 +3,17 @@
   "productName": "OpenWork",
   "version": "0.1.0",
   "identifier": "com.alibaba.openwork",
+  "build": {
+    "frontendDist": "../bootstrap"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "capabilities": ["bootstrap"]
+    }
+  },
   "bundle": {
     "shortDescription": "OpenWork — AI agent workspace",
     "resources": {
