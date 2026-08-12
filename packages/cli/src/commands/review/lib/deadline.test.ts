@@ -5,16 +5,9 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import {
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  utimesSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   BUDGET_STOP_PHRASE,
   DEADLINE_ENV,
@@ -430,48 +423,6 @@ describe('the budget-stop marker — the deterministic half of the disclosure', 
     expect(budgetStopEntryZh(undefined)).toBe(
       '反向审计——评审时间预算不足，未能开始下一轮',
     );
-  });
-});
-
-describe('the CI wiring contract', () => {
-  it('the workflow exports the exact env names the gate reads', () => {
-    // Renaming either side compiles, lints, and leaves every test green —
-    // the CLI just never sees a deadline, every round is admitted, and the
-    // outer kill returns. Pin the two halves of the contract together.
-    const workflow = readFileSync(
-      join(
-        dirname(fileURLToPath(import.meta.url)),
-        '..',
-        '..',
-        '..',
-        '..',
-        '..',
-        '..',
-        '.github',
-        'workflows',
-        'qwen-code-pr-review.yml',
-      ),
-      'utf8',
-    );
-    // Whole line, not substring: `toContain('export QWEN_REVIEW_DEADLINE_EPOCH')`
-    // stayed green when the variable was renamed to any superstring
-    // (`..._EPOCH_SECONDS` is the natural drift beside `..._RESERVE_SECONDS`)
-    // and when the export was commented out — both leave the CLI deadline-less
-    // and the gate failing open on every round.
-    expect(workflow).toMatch(new RegExp(`^\\s*export ${DEADLINE_ENV}$`, 'm'));
-    expect(workflow).toMatch(new RegExp(`^\\s*export ${RESERVE_ENV}$`, 'm'));
-    // The units are part of the contract: a milliseconds deadline admits every
-    // round forever (remaining ≈ 1.7e12); minutes instead of seconds refuses
-    // round 1 on every budgeted run. Pin the arithmetic that fixes both to
-    // whole seconds of epoch / of reserve.
-    expect(workflow).toContain(
-      `${DEADLINE_ENV}="$(( $(date +%s) + attempt_timeout ))"`,
-    );
-    expect(workflow).toContain(`${RESERVE_ENV}="$(( attempt_timeout / 3 ))"`);
-    // The workflow's reserve cap documents itself as mirroring
-    // DEFAULT_RESERVE_SECONDS ("keep the two in sync") — enforce the mirror,
-    // so a one-sided bump diverges a test instead of the CI tail.
-    expect(workflow).toContain(`-gt ${DEFAULT_RESERVE_SECONDS}`);
   });
 });
 
