@@ -80,16 +80,10 @@
         gap: 18px;
       }
       .mark {
-        display: grid;
-        place-items: center;
+        display: block;
         width: 58px;
         height: 58px;
-        border-radius: 18px;
-        background: linear-gradient(145deg, #7f6dff, #4d34df);
-        box-shadow: 0 14px 34px rgba(88, 63, 226, 0.38);
-        font:
-          700 26px/1 ui-monospace,
-          monospace;
+        object-fit: contain;
       }
       h1 {
         margin: 0;
@@ -236,7 +230,7 @@
     <main>
       <section class="shell" aria-live="polite">
         <div class="brand">
-          <div class="mark">O</div>
+          <img class="mark" src="./openwork-symbol.png" alt="" />
           <div>
             <h1>OpenWork</h1>
             <p class="eyebrow">Desktop workspace</p>
@@ -259,7 +253,6 @@
           </button>
           <button id="retry" hidden>Retry</button>
           <button id="logs">Open logs</button>
-          <button id="update" hidden>Install update</button>
         </div>
         <footer>
           <span id="version">Desktop</span

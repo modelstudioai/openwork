@@ -17,7 +17,7 @@ export function WelcomeHeader(props: WelcomeHeaderProps) {
     <div className={styles.header}>
       <div className={styles.titleRow}>
         <span>{t('welcome.titlePrefix')}</span>
-        <span className={styles.title}>Qwen Code</span>
+        <span className={styles.title}>OpenWork</span>
       </div>
       <div className={styles.subtitle}>{t('welcome.prompt')}</div>
     </div>

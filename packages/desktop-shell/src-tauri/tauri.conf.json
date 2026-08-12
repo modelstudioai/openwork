@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.alibaba.openwork",
   "build": {
+    "beforeDevCommand": "node scripts/serve-bootstrap.js",
+    "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../bootstrap"
   },
   "app": {
@@ -17,7 +19,7 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg", "nsis", "appimage", "deb"],
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "category": "DeveloperTool",
     "shortDescription": "OpenWork — AI agent workspace",
     "icon": [
@@ -53,14 +55,6 @@
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico"
       }
-    }
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "OPENWORK_UPDATER_PUBKEY_PLACEHOLDER",
-      "endpoints": [
-        "https://github.com/modelstudioai/openwork/releases/download/desktop-latest/desktop-latest.json"
-      ]
     }
   }
 }

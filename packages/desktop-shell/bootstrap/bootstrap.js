@@ -10,10 +10,7 @@ const error = document.querySelector('#error');
 const choose = document.querySelector('#choose');
 const retry = document.querySelector('#retry');
 const logs = document.querySelector('#logs');
-const update = document.querySelector('#update');
 const version = document.querySelector('#version');
-
-let updateVersion;
 
 function setWorkspace(path) {
   workspace.hidden = !path;
@@ -36,7 +33,7 @@ async function chooseWorkspace() {
   setStatus(
     'starting',
     'Opening workspace',
-    'Starting the bundled Qwen Code runtime…',
+    'Starting the bundled OpenWork runtime…',
   );
   try {
     const path = await invoke('choose_workspace');
@@ -57,7 +54,7 @@ async function retryRuntime() {
   if (!invoke) return;
   setStatus(
     'starting',
-    'Restarting Qwen Code',
+    'Restarting OpenWork',
     'Checking the bundled runtime and workspace…',
   );
   try {
@@ -65,29 +62,10 @@ async function retryRuntime() {
   } catch (failure) {
     setStatus(
       'error',
-      'Qwen Code could not restart',
+      'OpenWork could not restart',
       'Review the details or choose another workspace.',
       String(failure),
     );
-  }
-}
-
-async function installUpdate() {
-  if (!invoke) return;
-  update.disabled = true;
-  update.textContent = `Installing ${updateVersion || 'update'}…`;
-  try {
-    await invoke('install_update');
-  } catch (failure) {
-    setStatus(
-      'error',
-      'Update failed',
-      'Qwen Code remains usable. Try again or update manually.',
-      String(failure),
-    );
-  } finally {
-    update.disabled = false;
-    update.textContent = 'Install update';
   }
 }
 
@@ -108,7 +86,6 @@ async function openLogs() {
 choose.addEventListener('click', chooseWorkspace);
 retry.addEventListener('click', retryRuntime);
 logs.addEventListener('click', openLogs);
-update.addEventListener('click', installUpdate);
 
 async function initialize() {
   if (!invoke || !listen) {
@@ -116,7 +93,7 @@ async function initialize() {
       'error',
       'Desktop bridge unavailable',
       'The packaged desktop bridge did not initialize.',
-      'Restart Qwen Code.',
+      'Restart OpenWork.',
     );
     return;
   }
@@ -126,22 +103,17 @@ async function initialize() {
       setWorkspace(payload);
       setStatus(
         'starting',
-        'Starting Qwen Code',
+        'Starting OpenWork',
         'Launching the bundled runtime and checking its health…',
       );
     }),
     listen('runtime-failed', ({ payload }) => {
       setStatus(
         'error',
-        'Qwen Code could not start',
+        'OpenWork could not start',
         'Review the details, open the log, or choose another workspace.',
         String(payload),
       );
-    }),
-    listen('update-available', ({ payload }) => {
-      updateVersion = String(payload);
-      update.hidden = false;
-      update.textContent = `Install ${updateVersion}`;
     }),
   ]);
 
@@ -151,19 +123,19 @@ async function initialize() {
   if (state.status === 'starting') {
     setStatus(
       'starting',
-      'Starting Qwen Code',
+      'Starting OpenWork',
       'Launching the bundled runtime and checking its health…',
     );
   } else if (state.status === 'ready') {
     setStatus(
       'starting',
-      'Loading Qwen Code',
+      'Loading OpenWork',
       'Connecting to the local Web Shell…',
     );
   } else if (state.error) {
     setStatus(
       'error',
-      'Qwen Code could not start',
+      'OpenWork could not start',
       'Review the details, open the log, or choose another workspace.',
       state.error,
     );
@@ -180,7 +152,7 @@ initialize().catch((failure) => {
   setStatus(
     'error',
     'Desktop initialization failed',
-    'Restart Qwen Code or inspect the desktop log.',
+    'Restart OpenWork or inspect the desktop log.',
     String(failure),
   );
 });

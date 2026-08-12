@@ -8,7 +8,10 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
-const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const packageDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 const repoRoot = path.resolve(packageDir, '../..');
 const sourceRoot = process.env.OPENWORK_ROOT?.trim()
   ? path.resolve(process.env.OPENWORK_ROOT)
@@ -17,179 +20,266 @@ const runtimeDir = path.join(packageDir, 'runtime');
 const packageRoot = path.join(runtimeDir, 'openwork');
 const libDir = path.join(packageRoot, 'lib');
 const nodeDir = path.join(packageRoot, 'node');
+const qwenCodeVersion = JSON.parse(
+  fs.readFileSync(path.join(sourceRoot, 'package.json'), 'utf8'),
+).version;
+const desktopVersion = JSON.parse(
+  fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'),
+).version;
 const binDir = path.join(packageRoot, 'bin');
 
-const desktopVersion = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8')).version;
 const target = desktopTarget();
 const skipBuild = process.env.OPENWORK_DESKTOP_SKIP_BUILD === '1';
 
+const npm = process.env.npm_execpath;
+if (!npm) throw new Error('npm_execpath is unavailable. Run through npm.');
+
 if (!skipBuild) {
-  const bun = process.platform === 'win32' ? 'bun.exe' : 'bun';
-  console.log('Building OpenWork WebUI…');
-  execFileSync(bun, ['run', 'webui:build'], { cwd: sourceRoot, stdio: 'inherit' });
-  console.log('Building OpenWork server…');
-  execFileSync(bun, ['run', 'server:build'], { cwd: sourceRoot, stdio: 'inherit' });
-  console.log('Building session MCP server…');
-  execFileSync(bun, ['run', 'server:build:subprocess'], { cwd: sourceRoot, stdio: 'inherit' });
+  execFileSync(process.execPath, [npm, 'run', 'build', '--', '--cli-only'], {
+    cwd: sourceRoot,
+    stdio: 'inherit',
+  });
+  execFileSync(
+    process.execPath,
+    [npm, 'run', 'build', '--workspace=packages/webui'],
+    {
+      cwd: sourceRoot,
+      stdio: 'inherit',
+    },
+  );
+  execFileSync(
+    process.execPath,
+    [npm, 'run', 'build', '--workspace=packages/web-shell'],
+    {
+      cwd: sourceRoot,
+      stdio: 'inherit',
+    },
+  );
+  execFileSync(process.execPath, [npm, 'run', 'bundle'], {
+    cwd: sourceRoot,
+    stdio: 'inherit',
+  });
+  execFileSync(process.execPath, [npm, 'run', 'prepare:package'], {
+    cwd: sourceRoot,
+    stdio: 'inherit',
+  });
 }
 
-fs.rmSync(packageRoot, { recursive: true, force: true });
-fs.mkdirSync(packageRoot, { recursive: true });
+const distDir = path.join(sourceRoot, 'dist');
+for (const required of [
+  'cli.js',
+  'cli-entry.js',
+  'web-shell/index.html',
+  'web-shell/assets',
+]) {
+  const candidate = path.join(distDir, required);
+  if (!fs.existsSync(candidate)) {
+    throw new Error(`Missing bundled runtime asset: ${candidate}`);
+  }
+}
+
+fs.rmSync(runtimeDir, { recursive: true, force: true });
 fs.mkdirSync(libDir, { recursive: true });
-fs.mkdirSync(nodeDir, { recursive: true });
+fs.writeFileSync(path.join(packageRoot, '.gitkeep'), '');
 fs.mkdirSync(binDir, { recursive: true });
-
-// Stage WebUI
-const webuiDist = path.join(sourceRoot, 'apps', 'webui', 'dist');
-if (fs.existsSync(webuiDist)) {
-  fs.cpSync(webuiDist, path.join(libDir, 'webui'), { recursive: true });
-  console.log(`Staged WebUI into ${libDir}/webui`);
+copyDirectory(distDir, libDir);
+await installNodeRuntime(nodeDir, target);
+writeLaunchers(target);
+copyRequiredFile(
+  path.join(sourceRoot, 'LICENSE'),
+  path.join(packageRoot, 'LICENSE'),
+);
+copyRequiredFile(
+  path.join(packageDir, 'NOTICE'),
+  path.join(packageRoot, 'NOTICE'),
+);
+const nodeLicense = path.join(nodeDir, 'LICENSE');
+if (!fs.existsSync(nodeLicense)) {
+  throw new Error(`Bundled Node.js license is missing: ${nodeLicense}`);
 }
+fs.writeFileSync(
+  path.join(packageRoot, 'manifest.json'),
+  `${JSON.stringify(
+    {
+      name: '@openwork/desktop-shell',
+      desktopVersion,
+      qwenCodeVersion,
+      qwenCodeCommit: process.env.QWEN_CODE_COMMIT || gitCommit(sourceRoot),
+      target,
+      node: `v${process.versions.node}`,
+      builtAt: new Date().toISOString(),
+    },
+    null,
+    2,
+  )}\n`,
+);
+writeChecksums();
+console.log(
+  `Prepared OpenWork desktop runtime at ${path.relative(repoRoot, packageRoot)}`,
+);
 
-// Stage server
-const serverDist = path.join(sourceRoot, 'packages', 'server');
-if (fs.existsSync(serverDist)) {
-  fs.cpSync(serverDist, path.join(libDir, 'server'), { recursive: true, filter: (src) => !src.includes('node_modules') });
-  console.log(`Staged server into ${libDir}/server`);
-}
-
-// Stage session MCP server
-const mcpDist = path.join(sourceRoot, 'packages', 'session-mcp-server', 'dist');
-if (fs.existsSync(mcpDist)) {
-  fs.cpSync(mcpDist, path.join(libDir, 'session-mcp-server'), { recursive: true });
-  console.log(`Staged session MCP server into ${libDir}/session-mcp-server`);
-}
-
-// Stage resources (docs, themes, permissions, tool-icons, scripts)
-const resourcesDir = path.join(libDir, 'resources');
-const electronResources = path.join(sourceRoot, 'apps', 'electron', 'resources');
-fs.mkdirSync(resourcesDir, { recursive: true });
-for (const dir of ['docs', 'themes', 'permissions', 'tool-icons']) {
-  const src = path.join(electronResources, dir);
-  if (fs.existsSync(src)) {
-    fs.cpSync(src, path.join(resourcesDir, dir), { recursive: true });
-    console.log(`Staged ${dir}/ into ${resourcesDir}/${dir}`);
+async function installNodeRuntime(destination, desktopTarget) {
+  const nvmrc = fs.readFileSync(path.join(repoRoot, '.nvmrc'), 'utf8').trim();
+  const nodeVersion = process.versions.node;
+  if (!nodeVersion.startsWith(`${nvmrc}.`)) {
+    throw new Error(
+      `Node ${nodeVersion} does not match .nvmrc major version ${nvmrc}. ` +
+        'Run the correct Node or update .nvmrc.',
+    );
   }
-}
-const scriptsSrc = path.join(electronResources, 'scripts');
-if (fs.existsSync(scriptsSrc)) {
-  fs.cpSync(scriptsSrc, path.join(resourcesDir, 'scripts'), { recursive: true });
-  console.log(`Staged doc tools into ${resourcesDir}/scripts`);
-}
-const binSrc = path.join(electronResources, 'bin');
-if (fs.existsSync(binSrc)) {
-  fs.cpSync(binSrc, path.join(resourcesDir, 'bin'), { recursive: true });
-  console.log(`Staged binaries into ${resourcesDir}/bin`);
-}
-
-// Create cli-entry.js for the Tauri shell
-const entryPath = path.join(libDir, 'cli-entry.js');
-fs.writeFileSync(entryPath, [
-  `#!/usr/bin/env node`,
-  `// OpenWork desktop runtime entry`,
-  `// Generated by prepare-runtime.js — ${new Date().toISOString()}`,
-  ``,
-  `// Forward OPENWORK_SERVER_TOKEN to CRAFT_SERVER_TOKEN`,
-  `if (process.env.OPENWORK_SERVER_TOKEN && !process.env.CRAFT_SERVER_TOKEN) {`,
-  `  process.env.CRAFT_SERVER_TOKEN = process.env.OPENWORK_SERVER_TOKEN`,
-  `}`,
-  `if (!process.env.CRAFT_RPC_PORT) process.env.CRAFT_RPC_PORT = '0'`,
-  `if (!process.env.CRAFT_RPC_HOST) process.env.CRAFT_RPC_HOST = '127.0.0.1'`,
-  ``,
-  `// Parse CLI args`,
-  `const argv = process.argv.slice(2)`,
-  `for (let i = 0; i < argv.length; i++) {`,
-  `  if (argv[i] === '--workspace' && i + 1 < argv.length) {`,
-  `    process.env.CRAFT_WORKSPACE = argv[++i]`,
-  `  } else if (argv[i] === '--port' && i + 1 < argv.length) {`,
-  `    process.env.CRAFT_RPC_PORT = argv[++i]`,
-  `  } else if (argv[i] === '--hostname' && i + 1 < argv.length) {`,
-  `    process.env.CRAFT_RPC_HOST = argv[++i]`,
-  `  }`,
-  `}`,
-  ``,
-  `// Set WebUI directory`,
-  `const runtimeDir = process.env.OPENWORK_DESKTOP_RUNTIME_DIR || __dirname + '/../../..'`,
-  `const fs = require('fs'), path = require('path')`,
-  `const webuiDir = path.join(runtimeDir, 'lib', 'webui')`,
-  `if (fs.existsSync(webuiDir)) process.env.CRAFT_WEBUI_DIR = webuiDir`,
-  ``,
-  `// Load and start the server`,
-  `require(path.join(__dirname, 'server', 'index.js'))`,
-].join('\n'), 'utf8');
-fs.chmodSync(entryPath, 0o755);
-
-// Download and stage Node.js
-const nodeVersion = fs.readFileSync(path.join(sourceRoot, '.nvmrc'), 'utf8').trim().replace(/^v/, '');
-const nodeArchive = nodeArchiveName(target, nodeVersion);
-const nodeArchiveUrl = `https://nodejs.org/dist/v${nodeVersion}/${nodeArchive}`;
-const nodeArchivePath = path.join(nodeDir, nodeArchive);
-
-console.log(`Downloading Node.js v${nodeVersion} for ${target}…`);
-const response = await fetch(nodeArchiveUrl);
-if (!response.ok) throw new Error(`Failed to download Node.js: HTTP ${response.status}`);
-await pipeline(response.body, fs.createWriteStream(nodeArchivePath));
-
-console.log('Verifying Node.js checksum…');
-const sigs = await fetch(`https://nodejs.org/dist/v${nodeVersion}/SHASUMS256.txt`).then(r => r.text());
-const expected = sigs.split('\n').find(l => l.includes(nodeArchive))?.split(/\s+/)[0];
-if (!expected) throw new Error(`No checksum found for ${nodeArchive}`);
-const actual = crypto.createHash('sha256').update(fs.readFileSync(nodeArchivePath)).digest('hex');
-if (actual !== expected) throw new Error(`Node.js checksum mismatch. Expected: ${expected}, Actual: ${actual}`);
-
-console.log('Extracting Node.js…');
-if (target.startsWith('win')) {
-  execFileSync('tar', ['-xf', nodeArchivePath, '-C', nodeDir, '--strip-components=1']);
-} else {
-  execFileSync('tar', ['-xzf', nodeArchivePath, '-C', nodeDir, '--strip-components=1']);
-}
-fs.rmSync(nodeArchivePath);
-
-// Create launcher
-if (target.startsWith('win')) {
-  fs.writeFileSync(path.join(binDir, 'openwork.cmd'), `@echo off\r\n"${path.join(nodeDir, 'node.exe')}" "${entryPath}" %*`, 'utf8');
-} else {
-  const launcher = path.join(binDir, 'openwork');
-  fs.writeFileSync(launcher, `#!/bin/sh\n"${path.join(nodeDir, 'bin', 'node')}" "${entryPath}" "$@"`, 'utf8');
-  fs.chmodSync(launcher, 0o755);
-}
-
-// Manifest and checksums
-const manifest = { version: desktopVersion, node: nodeVersion, target, generated: new Date().toISOString(), files: [] };
-const checksums = {};
-function walk(dir, base) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    const rel = path.relative(base, full);
-    if (entry.isDirectory()) { walk(full, base) }
-    else {
-      const stat = fs.statSync(full);
-      manifest.files.push({ path: rel, size: stat.size });
-      checksums[rel] = crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex');
+  const archiveName = nodeArchiveName(nodeVersion, desktopTarget);
+  const downloadRoot = `https://nodejs.org/dist/v${nodeVersion}`;
+  const temporaryRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'openwork-desktop-node-'),
+  );
+  try {
+    const checksumsPath = path.join(temporaryRoot, 'SHASUMS256.txt');
+    const archivePath = path.join(temporaryRoot, archiveName);
+    await download(`${downloadRoot}/SHASUMS256.txt`, checksumsPath);
+    await download(`${downloadRoot}/${archiveName}`, archivePath);
+    verifyChecksum(
+      archivePath,
+      archiveName,
+      fs.readFileSync(checksumsPath, 'utf8'),
+    );
+    extractNodeArchive(archivePath, temporaryRoot);
+    const extractedRoot = path.join(
+      temporaryRoot,
+      archiveName.replace(/\.(tar\.gz|tar\.xz|zip)$/, ''),
+    );
+    if (!fs.existsSync(extractedRoot)) {
+      throw new Error(`Extracted Node runtime is missing: ${extractedRoot}`);
     }
+    copyDirectory(extractedRoot, destination);
+  } finally {
+    fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }
 }
-walk(packageRoot, packageRoot);
-fs.writeFileSync(path.join(packageRoot, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
-fs.writeFileSync(path.join(packageRoot, 'checksums.json'), JSON.stringify(checksums, null, 2), 'utf8');
-console.log(`OpenWork runtime ${desktopVersion} prepared at ${packageRoot}`);
 
-// ---- helpers ----
 function desktopTarget() {
-  const p = os.platform(), a = os.arch();
-  if (p === 'darwin') return a === 'arm64' ? 'darwin-arm64' : 'darwin-x64';
-  if (p === 'linux') return a === 'arm64' ? 'linux-arm64' : 'linux-x64';
-  if (p === 'win32') return 'win-x64';
-  throw new Error(`Unsupported platform: ${p} ${a}`);
-}
-function nodeArchiveName(target, version) {
-  const prefix = `node-v${version}-`;
-  switch (target) {
-    case 'darwin-arm64': return `${prefix}darwin-arm64.tar.gz`;
-    case 'darwin-x64': return `${prefix}darwin-x64.tar.gz`;
-    case 'linux-arm64': return `${prefix}linux-arm64.tar.xz`;
-    case 'linux-x64': return `${prefix}linux-x64.tar.xz`;
-    case 'win-x64': return `${prefix}win-x64.zip`;
-    default: throw new Error(`Unsupported target: ${target}`);
+  const target =
+    process.env.OPENWORK_DESKTOP_TARGET ||
+    `${process.platform}-${process.arch}`;
+  const aliases = {
+    'aarch64-apple-darwin': 'darwin-arm64',
+    'x86_64-apple-darwin': 'darwin-x64',
+    'aarch64-unknown-linux-gnu': 'linux-arm64',
+    'x86_64-unknown-linux-gnu': 'linux-x64',
+    'x86_64-pc-windows-msvc': 'win32-x64',
+  };
+  const resolved = aliases[target] || target;
+  if (
+    ![
+      'darwin-arm64',
+      'darwin-x64',
+      'linux-arm64',
+      'linux-x64',
+      'win32-x64',
+    ].includes(resolved)
+  ) {
+    throw new Error(`Unsupported desktop target: ${target}`);
   }
+  return resolved;
+}
+
+function nodeArchiveName(version, desktopTarget) {
+  const nodeTarget = desktopTarget === 'win32-x64' ? 'win-x64' : desktopTarget;
+  const extension = desktopTarget.startsWith('darwin-')
+    ? 'tar.gz'
+    : desktopTarget.startsWith('linux-')
+      ? 'tar.xz'
+      : 'zip';
+  return `node-v${version}-${nodeTarget}.${extension}`;
+}
+
+async function download(url, destination) {
+  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+  if (!response.ok || !response.body) {
+    throw new Error(`Failed to download ${url}: HTTP ${response.status}`);
+  }
+  await pipeline(response.body, fs.createWriteStream(destination));
+}
+
+function verifyChecksum(archivePath, archiveName, checksums) {
+  const expected = checksums
+    .split(/\r?\n/)
+    .map((line) => line.trim().split(/\s+/))
+    .find(([, fileName]) => fileName === archiveName)?.[0];
+  if (!expected) {
+    throw new Error(`Node checksums do not list ${archiveName}`);
+  }
+  const actual = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(archivePath))
+    .digest('hex');
+  if (actual !== expected) {
+    throw new Error(`Node runtime checksum mismatch for ${archiveName}`);
+  }
+}
+
+function extractNodeArchive(archivePath, destination) {
+  execFileSync('tar', ['-xf', archivePath, '-C', destination]);
+}
+
+function writeLaunchers(desktopTarget) {
+  if (desktopTarget.startsWith('win32-')) {
+    fs.writeFileSync(
+      path.join(binDir, 'qwen.cmd'),
+      '@echo off\r\nsetlocal\r\nset "ROOT=%~dp0.."\r\n"%ROOT%\\node\\node.exe" "%ROOT%\\lib\\cli-entry.js" %*\r\nexit /b %ERRORLEVEL%\r\n',
+    );
+    return;
+  }
+  const launcher =
+    '#!/usr/bin/env sh\nset -e\nROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"\nexec "$ROOT/node/bin/node" "$ROOT/lib/cli-entry.js" "$@"\n';
+  const launcherPath = path.join(binDir, 'qwen');
+  fs.writeFileSync(launcherPath, launcher);
+  fs.chmodSync(launcherPath, 0o755);
+}
+
+function copyRequiredFile(source, destination) {
+  if (!fs.statSync(source, { throwIfNoEntry: false })?.isFile()) {
+    throw new Error(`Required desktop runtime file is missing: ${source}`);
+  }
+  fs.copyFileSync(source, destination);
+}
+
+function gitCommit(directory) {
+  return execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: directory,
+    encoding: 'utf8',
+  }).trim();
+}
+
+function writeChecksums() {
+  const checksums = {};
+  for (const file of runtimeFiles(packageRoot)) {
+    const relative = path.relative(packageRoot, file).split(path.sep).join('/');
+    if (relative === 'checksums.json') continue;
+    checksums[relative] = crypto
+      .createHash('sha256')
+      .update(fs.readFileSync(file))
+      .digest('hex');
+  }
+  fs.writeFileSync(
+    path.join(packageRoot, 'checksums.json'),
+    `${JSON.stringify(checksums, null, 2)}\n`,
+  );
+}
+
+function runtimeFiles(directory) {
+  return fs
+    .readdirSync(directory, { withFileTypes: true })
+    .flatMap((entry) => {
+      const absolute = path.join(directory, entry.name);
+      return entry.isDirectory() ? runtimeFiles(absolute) : [absolute];
+    })
+    .sort();
+}
+
+function copyDirectory(source, destination) {
+  fs.cpSync(source, destination, {
+    recursive: true,
+    dereference: true,
+    filter: (entry) => path.basename(entry) !== '.DS_Store',
+  });
 }

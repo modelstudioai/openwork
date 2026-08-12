@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>NSDocumentsFolderUsageDescription</key>
-  <string>Qwen Code uses a folder in Documents as its default local workspace.</string>
+  <string>OpenWork uses a folder in Documents as its default local workspace.</string>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Qwen Code uses the microphone for voice dictation in the prompt composer.</string>
+  <string>OpenWork uses the microphone for voice dictation in the prompt composer.</string>
 </dict>
 </plist>

@@ -18,7 +18,9 @@ if (!fs.statSync(executable, { throwIfNoEntry: false })?.isFile()) {
   throw new Error(`Packaged executable is missing: ${executable}`);
 }
 
-const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'openwork-desktop-smoke-'));
+const workspace = fs.mkdtempSync(
+  path.join(os.tmpdir(), 'openwork-desktop-smoke-'),
+);
 const isolatedHome = path.join(workspace, 'home');
 const isolatedState = path.join(workspace, 'state');
 fs.mkdirSync(isolatedHome);
@@ -52,7 +54,7 @@ const child = spawn(executable, [], {
   env: {
     ...process.env,
     OPENWORK_DESKTOP_WORKSPACE: workspace,
-    OPENWORK_CODE_SUPPRESS_YOLO_WARNING: '1',
+    QWEN_CODE_SUPPRESS_YOLO_WARNING: '1',
     HOME: isolatedHome,
     XDG_STATE_HOME: isolatedState,
     XDG_DATA_HOME: isolatedState,
@@ -65,7 +67,7 @@ const child = spawn(executable, [], {
           OPENWORK_DESKTOP_RUNTIME_DIR: path.join(
             packageDir,
             'runtime',
-            'qwen-code',
+            'openwork',
           ),
         }),
     ...(process.platform === 'win32'
@@ -109,11 +111,9 @@ async function waitForReady() {
   while (Date.now() < deadline) {
     if (exitFailure) throw exitFailure;
     const contents = readNewLog();
-    const match = contents.match(
-      /openwork serve listening on (http:\/\/127\.0\.0\.1:\d+)/,
-    );
-    if (match) {
-      await verifyPackagedShell(match[1], contents);
+    const baseUrl = listeningUrl(contents);
+    if (baseUrl) {
+      await verifyPackagedShell(baseUrl, contents);
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -136,6 +136,13 @@ function readNewLog() {
     previousLog = contents;
   }
   return result.text;
+}
+
+function listeningUrl(contents) {
+  const match = contents.match(
+    /qwen serve listening on (http:\/\/127\.0\.0\.1:\d+)/,
+  );
+  return match?.[1] ?? null;
 }
 
 // The packaged smoke verifies the unauthenticated navigation boundary: the
@@ -173,9 +180,10 @@ async function verifyPackagedShell(baseUrl, contents) {
       contents,
     );
   }
-  if (!(await shell.text()).includes('<!doctype html>')) {
+  const html = await shell.text();
+  if (!/^<!doctype html>/i.test(html) || !html.includes('<title>OpenWork')) {
     throw smokeError(
-      'Packaged desktop Web Shell navigation did not return the HTML shell',
+      'Packaged desktop WebUI navigation did not return the OpenWork HTML shell',
       contents,
     );
   }

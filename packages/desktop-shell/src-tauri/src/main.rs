@@ -17,16 +17,16 @@ use std::sync::{Arc, Mutex};
 use tauri::menu::{Menu, MenuItem, MenuItemBuilder, SubmenuBuilder};
 use tauri::webview::{DownloadEvent, NewWindowResponse, WebviewWindowBuilder};
 use tauri::{
-    AppHandle, Emitter, Listener, Manager, RunEvent, State, WebviewUrl, WebviewWindow,
-    WindowEvent,
+    AppHandle, Emitter, Listener, Manager, RunEvent, State, WebviewUrl, WebviewWindow, WindowEvent,
 };
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_dialog::DialogExt;
 use url::Url;
 
-#[cfg(target_os = "windows")]
+#[cfg(debug_assertions)]
+const BOOTSTRAP_URL: &str = "http://127.0.0.1:1420";
+#[cfg(all(not(debug_assertions), target_os = "windows"))]
 const BOOTSTRAP_URL: &str = "http://tauri.localhost";
-#[cfg(not(target_os = "windows"))]
+#[cfg(all(not(debug_assertions), not(target_os = "windows")))]
 const BOOTSTRAP_URL: &str = "tauri://localhost";
 #[cfg(target_os = "macos")]
 static FULLSCREEN_HIDE_PENDING: AtomicBool = AtomicBool::new(false);
@@ -94,7 +94,6 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_menu_event(|app, event| {
             if event.id() == "local-control" {
                 if let Err(error) = show_local_control_window(app) {
@@ -112,7 +111,6 @@ fn main() {
             disable_local_control,
             open_logs,
             restart_runtime,
-            install_update,
         ])
         .setup(setup_app);
 
@@ -294,7 +292,6 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             let _ = handle.emit("runtime-failed", error);
         }
     }
-    check_updates_silently(handle.clone());
     spawn_window_state_flusher(handle);
     Ok(())
 }
@@ -411,10 +408,7 @@ fn disable_local_control(webview: WebviewWindow, app: AppHandle) -> Result<(), S
 }
 
 #[tauri::command]
-fn open_logs(
-    webview: WebviewWindow,
-    state: State<'_, ApplicationState>,
-) -> Result<(), String> {
+fn open_logs(webview: WebviewWindow, state: State<'_, ApplicationState>) -> Result<(), String> {
     require_bootstrap_origin(&webview)?;
     if let Some(parent) = state.log_path.parent() {
         fs::create_dir_all(parent)
@@ -426,46 +420,6 @@ fn open_logs(
     }
     open::that_detached(&state.log_path)
         .map_err(|error| format!("Failed to open desktop logs: {error}"))
-}
-
-#[tauri::command]
-async fn install_update(webview: WebviewWindow, app: AppHandle) -> Result<(), String> {
-    require_bootstrap_origin(&webview)?;
-    let update = app
-        .updater()
-        .map_err(|error| format!("Failed to initialize updater: {error}"))?
-        .check()
-        .await
-        .map_err(|error| format!("Failed to check for updates: {error}"))?
-        .ok_or_else(|| "No desktop update is available.".to_string())?;
-    let version = update.version.clone();
-    let confirmed = tauri::async_runtime::spawn_blocking({
-        let app = app.clone();
-        move || {
-            app.dialog()
-                .message(format!(
-                    "Install OpenWork {version} and restart now?"
-                ))
-                .title("OpenWork update")
-                .kind(MessageDialogKind::Info)
-                .buttons(MessageDialogButtons::OkCancelCustom(
-                    "Install and restart".to_string(),
-                    "Cancel".to_string(),
-                ))
-                .blocking_show()
-        }
-    })
-    .await
-    .map_err(|error| format!("Failed to show update confirmation: {error}"))?;
-    if !confirmed {
-        return Ok(());
-    }
-    update
-        .download_and_install(|_, _| {}, || {})
-        .await
-        .map_err(|error| format!("Failed to install update: {error}"))?;
-    app.request_restart();
-    Ok(())
 }
 
 fn start_runtime_async(app: AppHandle, workspace: PathBuf, create_if_missing: bool) {
@@ -561,6 +515,11 @@ fn start_runtime_async(app: AppHandle, workspace: PathBuf, create_if_missing: bo
                     return;
                 }
                 *runtime_slot = Some(runtime);
+                // Register the runtime before its monitor can emit an exit event.
+                runtime_slot
+                    .as_ref()
+                    .expect("runtime was just registered")
+                    .monitor(&app);
                 drop(runtime_slot);
                 clear_pending_runtime(&state, generation);
                 if state
@@ -660,10 +619,7 @@ fn default_workspace(app: &AppHandle) -> Result<(PathBuf, bool), String> {
         .path()
         .home_dir()
         .map_err(|error| format!("Failed to resolve the home directory: {error}"))?;
-    Ok((
-        default_workspace_path(&home, override_dir.as_deref()),
-        true,
-    ))
+    Ok((default_workspace_path(&home, override_dir.as_deref()), true))
 }
 
 // An empty override is treated as unset so the ~/Documents/OpenWork default wins,
@@ -793,6 +749,11 @@ fn is_allowed_navigation(url: &Url, origin: &Mutex<Option<Url>>) -> bool {
 }
 
 fn is_bootstrap_url(url: &Url) -> bool {
+    if cfg!(debug_assertions) {
+        return url.scheme() == "http"
+            && url.host_str() == Some("127.0.0.1")
+            && url.port() == Some(1420);
+    }
     if url.scheme() == "tauri" && url.host_str() == Some("localhost") {
         return true;
     }
@@ -816,62 +777,6 @@ fn is_same_origin(url: &Url, origin: &Url) -> bool {
     url.scheme() == origin.scheme()
         && url.host_str() == origin.host_str()
         && url.port_or_known_default() == origin.port_or_known_default()
-}
-
-fn check_updates_silently(app: AppHandle) {
-    if cfg!(debug_assertions) {
-        return;
-    }
-    tauri::async_runtime::spawn(async move {
-        let updater = match app.updater() {
-            Ok(updater) => updater,
-            Err(_) => return,
-        };
-        let Ok(Some(update)) = updater.check().await else {
-            return;
-        };
-        let _ = app.emit("update-available", update.version.clone());
-        let version = update.version.clone();
-        let confirmed = tauri::async_runtime::spawn_blocking({
-            let app = app.clone();
-            let version = version.clone();
-            move || {
-                app.dialog()
-                    .message(format!(
-                        "OpenWork {version} is available. Install and restart now?"
-                    ))
-                    .title("OpenWork update")
-                    .kind(MessageDialogKind::Info)
-                    .buttons(MessageDialogButtons::OkCancelCustom(
-                        "Install and restart".to_string(),
-                        "Later".to_string(),
-                    ))
-                    .blocking_show()
-            }
-        })
-        .await;
-        if !matches!(confirmed, Ok(true)) {
-            return;
-        }
-        if let Err(error) = update.download_and_install(|_, _| {}, || {}).await {
-            let _ = tauri::async_runtime::spawn_blocking({
-                let app = app.clone();
-                let version = version.clone();
-                move || {
-                    app.dialog()
-                        .message(format!(
-                            "OpenWork {version} could not be installed.\n\n{error}\n\nSave your work before quitting. Reinstall OpenWork if it does not reopen."
-                        ))
-                        .title("OpenWork update failed")
-                        .kind(MessageDialogKind::Error)
-                        .blocking_show()
-                }
-            })
-            .await;
-            return;
-        }
-        app.request_restart();
-    });
 }
 
 fn is_safe_external_url(url: &Url) -> bool {
@@ -969,7 +874,7 @@ mod tests {
         let _ = fs::remove_dir_all(&home);
 
         let workspace = default_workspace_path(&home, None);
-        assert_eq!(workspace, home.join("Documents/Qwen"));
+        assert_eq!(workspace, home.join("Documents/OpenWork"));
         ensure_workspace_dir(&workspace).expect("create workspace");
         ensure_workspace_dir(&workspace).expect("reuse workspace");
 
@@ -1033,23 +938,34 @@ mod tests {
 
     #[test]
     fn allows_platform_bootstrap_origins() {
-        assert!(is_bootstrap_url(
-            &Url::parse("tauri://localhost/").expect("tauri bootstrap")
-        ));
-        if cfg!(target_os = "windows") {
+        if cfg!(debug_assertions) {
             assert!(is_bootstrap_url(
-                &Url::parse("http://tauri.localhost/").expect("windows bootstrap")
+                &Url::parse("http://127.0.0.1:1420/").expect("development bootstrap")
+            ));
+            assert!(!is_bootstrap_url(
+                &Url::parse("http://127.0.0.1:1421/").expect("wrong development port")
             ));
         } else {
-            assert!(!is_bootstrap_url(
-                &Url::parse("http://tauri.localhost/").expect("not a bootstrap origin")
+            assert!(is_bootstrap_url(
+                &Url::parse("tauri://localhost/").expect("tauri bootstrap")
             ));
+            if cfg!(target_os = "windows") {
+                assert!(is_bootstrap_url(
+                    &Url::parse("http://tauri.localhost/").expect("windows bootstrap")
+                ));
+            } else {
+                assert!(!is_bootstrap_url(
+                    &Url::parse("http://tauri.localhost/").expect("not a bootstrap origin")
+                ));
+            }
         }
     }
 
     #[test]
     fn recovery_uses_the_platform_bootstrap_origin() {
-        let expected = if cfg!(windows) {
+        let expected = if cfg!(debug_assertions) {
+            "http://127.0.0.1:1420"
+        } else if cfg!(windows) {
             "http://tauri.localhost"
         } else {
             "tauri://localhost"
@@ -1095,9 +1011,7 @@ mod tests {
 
     #[test]
     fn allows_only_the_recorded_origin_once_it_is_set() {
-        let origin = Mutex::new(Some(
-            Url::parse("http://127.0.0.1:49152/").expect("origin"),
-        ));
+        let origin = Mutex::new(Some(Url::parse("http://127.0.0.1:49152/").expect("origin")));
         assert!(is_allowed_navigation(
             &Url::parse("http://127.0.0.1:49152/session/123").expect("same origin"),
             &origin,
@@ -1114,9 +1028,7 @@ mod tests {
 
     #[test]
     fn allows_bootstrap_even_after_origin_is_set() {
-        let origin = Mutex::new(Some(
-            Url::parse("http://127.0.0.1:49152/").expect("origin"),
-        ));
+        let origin = Mutex::new(Some(Url::parse("http://127.0.0.1:49152/").expect("origin")));
         assert!(is_allowed_navigation(
             &Url::parse(BOOTSTRAP_URL).expect("bootstrap"),
             &origin,

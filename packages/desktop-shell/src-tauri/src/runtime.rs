@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use url::Url;
 
+const LISTEN_PREFIX: &str = "qwen serve listening on ";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(45);
 const HEALTH_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 const HEALTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
@@ -59,7 +60,8 @@ impl DesktopRuntime {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .env("OPENWORK_DESKTOP", "1")
-            .env("OPENWORK_SERVER_TOKEN", &token);
+            .env("QWEN_CODE_DESKTOP", "1")
+            .env("QWEN_SERVER_TOKEN", &token);
 
         let mut child = command
             .group_spawn()
@@ -103,8 +105,6 @@ impl DesktopRuntime {
                 return Err(error);
             }
         };
-        monitor_runtime(app.clone(), id, Arc::clone(&child), Arc::clone(&stopping));
-
         Ok(Self {
             id,
             base_url,
@@ -117,6 +117,15 @@ impl DesktopRuntime {
     pub fn stop(&self) {
         self.stopping.store(true, Ordering::SeqCst);
         stop_runtime_handle(&self.child);
+    }
+
+    pub fn monitor(&self, app: &AppHandle) {
+        monitor_runtime(
+            app.clone(),
+            self.id,
+            Arc::clone(&self.child),
+            Arc::clone(&self.stopping),
+        );
     }
 
     pub fn base_url(&self) -> &Url {
@@ -163,7 +172,7 @@ impl RuntimeLayout {
         };
         let (node, entry) = layout_from_root(root);
         require_file(&node, "Node.js runtime")?;
-        require_file(&entry, "OpenWork runtime entry")?;
+        require_file(&entry, "Qwen Code runtime entry")?;
         Ok(Self { node, entry })
     }
 }
@@ -375,18 +384,14 @@ fn monitor_runtime(
 }
 
 fn parse_listening_url(line: &str) -> Option<Url> {
-    if let Ok(event) = serde_json::from_str::<serde_json::Value>(line) {
-        if event.get("event").and_then(|v| v.as_str()) == Some("openwork-server-listening") {
-            if let Some(url_str) = event.get("url").and_then(|v| v.as_str()) {
-                if let Ok(url) = Url::parse(url_str) {
-                    if url.scheme() == "http" && url.host_str() == Some("127.0.0.1") {
-                        return Some(url);
-                    }
-                }
-            }
-        }
+    let rest = line.strip_prefix(LISTEN_PREFIX)?;
+    let raw_url = rest.split_whitespace().next()?;
+    let url = Url::parse(raw_url).ok()?;
+    if url.scheme() == "http" && url.host_str() == Some("127.0.0.1") {
+        Some(url)
+    } else {
+        None
     }
-    None
 }
 
 enum StartupChildState {
@@ -539,14 +544,14 @@ fn runtime_arguments(workspace: &Path) -> Vec<OsString> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    use super::layout_from_root;
     use super::{
         append_failure_output, parse_listening_url, resolve_workspace, runtime_arguments,
         DesktopRuntime, RuntimeStopped, FAILURE_OUTPUT_LIMIT,
     };
     #[cfg(unix)]
     use super::{stop_runtime_handle, wait_for_listening};
-    #[cfg(windows)]
-    use super::layout_from_root;
     use std::path::Path;
     #[cfg(windows)]
     use std::path::PathBuf;
@@ -620,7 +625,7 @@ mod tests {
     #[test]
     fn parses_loopback_listening_line() {
         let url = parse_listening_url(
-            r#"{"event":"openwork-server-listening","url":"http://127.0.0.1:49152","pid":12345}"#,
+            "qwen serve listening on http://127.0.0.1:49152 (mode=stdio, workspace=/tmp)",
         )
         .expect("listening URL");
         assert_eq!(url.as_str(), "http://127.0.0.1:49152/");
@@ -629,7 +634,7 @@ mod tests {
     #[test]
     fn rejects_non_loopback_listening_line() {
         assert!(parse_listening_url(
-            r#"{"event":"openwork-server-listening","url":"http://0.0.0.0:4170","pid":12345}"#,
+            "qwen serve listening on http://0.0.0.0:4170 (mode=stdio, workspace=/tmp)"
         )
         .is_none());
     }

@@ -762,17 +762,13 @@ mod tests {
         assert_eq!(url, "http://192.168.1.20:49152/#token=pair-token");
 
         let url = local_control_url(
-            &Url::parse("http://127.0.0.1:4170/session/x?workspace=")
-                .expect("current URL"),
+            &Url::parse("http://127.0.0.1:4170/session/x?workspace=").expect("current URL"),
             "192.168.1.20".parse().expect("LAN address"),
             49152,
             "pair-token",
         )
         .expect("Local Control URL");
-        assert_eq!(
-            url,
-            "http://192.168.1.20:49152/session/x#token=pair-token"
-        );
+        assert_eq!(url, "http://192.168.1.20:49152/session/x#token=pair-token");
     }
 
     #[test]
@@ -914,8 +910,7 @@ mod tests {
             Err(400),
         );
 
-        let request =
-            b"GET / HTTP/1.1\r\nHost: 192.168.1.10:49152\r\nX-Inject: a\r\r\n\r\n";
+        let request = b"GET / HTTP/1.1\r\nHost: 192.168.1.10:49152\r\nX-Inject: a\r\r\n\r\n";
         assert_eq!(
             rewrite_request(
                 request,

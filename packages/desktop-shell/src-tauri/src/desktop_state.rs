@@ -295,7 +295,8 @@ mod tests {
 
     #[test]
     fn atomic_write_replaces_existing_contents() {
-        let root = std::env::temp_dir().join(format!("openwork-desktop-state-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("openwork-desktop-state-{}", std::process::id()));
         let path = root.join("desktop-state.json");
         write_atomic(&path, b"first").expect("first write");
         write_atomic(&path, b"second").expect("second write");

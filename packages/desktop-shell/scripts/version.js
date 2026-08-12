@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const packageDir = process.env.QWEN_DESKTOP_PACKAGE_DIR
-  ? path.resolve(process.env.QWEN_DESKTOP_PACKAGE_DIR)
+const packageDir = process.env.OPENWORK_DESKTOP_PACKAGE_DIR
+  ? path.resolve(process.env.OPENWORK_DESKTOP_PACKAGE_DIR)
   : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const version = process.argv[2]?.replace(/^v/, '');
 if (

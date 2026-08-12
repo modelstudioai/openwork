@@ -10,7 +10,7 @@ const packageDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const runtimeRoot = path.join(packageDir, 'runtime', 'qwen-code');
+const runtimeRoot = path.join(packageDir, 'runtime', 'openwork');
 const nodePath =
   process.platform === 'win32'
     ? path.join(runtimeRoot, 'node', 'node.exe')
@@ -36,7 +36,12 @@ const child = spawn(
   ],
   {
     cwd: packageDir,
-    env: { ...process.env, OPENWORK_SERVER_TOKEN: token },
+    env: {
+      ...process.env,
+      OPENWORK_DESKTOP: '1',
+      QWEN_CODE_DESKTOP: '1',
+      QWEN_SERVER_TOKEN: token,
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   },
 );
@@ -52,7 +57,7 @@ child.stdout.setEncoding('utf8');
 child.stderr.setEncoding('utf8');
 child.stdout.on('data', (chunk) => {
   output += chunk;
-  const match = output.match(/openwork serve listening on (http:\/\/[^\s]+)/);
+  const match = output.match(/qwen serve listening on (http:\/\/[^\s]+)/);
   if (match && !verifying) {
     verifying = true;
     void verify(match[1]).catch(finish);
@@ -62,37 +67,41 @@ child.stderr.on('data', (chunk) => {
   output += chunk;
 });
 child.on('exit', (code) => {
-  if (!done)
+  if (!done) {
     finish(
       new Error(
         `Bundled daemon exited before readiness (code ${code})\n${output}`,
       ),
     );
+  }
 });
 
 async function verify(baseUrl) {
-  const response = await fetch(`${baseUrl}/health`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const text = await response.text();
-  if (!response.ok || !text.includes('"status":"ok"')) {
-    finish(new Error(`Health check failed: ${response.status} ${text}`));
-    return;
-  }
-  // The shallow health probe triggers the deferred runtime start. Wait for
-  // deep health (served by the runtime app) before asserting the
-  // unauthenticated shell, which the delegating app 401s until the runtime
-  // is mounted.
   await waitForDeepHealth(baseUrl);
   const shell = await fetch(baseUrl, {
     headers: { Accept: 'text/html' },
   });
   const html = await shell.text();
-  if (!shell.ok || !html.includes('<div id="root"></div>')) {
-    finish(new Error(`Web Shell check failed: ${shell.status}`));
-    return;
+  if (
+    !shell.ok ||
+    !shell.headers.get('content-type')?.startsWith('text/html') ||
+    !html.includes('<div id="root"></div>')
+  ) {
+    throw new Error(
+      `Web Shell check failed: ${shell.status} ${shell.headers.get('content-type')}\n${html.slice(0, 500)}`,
+    );
   }
-  console.log(`Bundled daemon and Web Shell ready at ${baseUrl}`);
+  const asset = html.match(/<script[^>]+src="(\/assets\/[^"]+)"/)?.[1];
+  if (!asset) {
+    throw new Error('Web Shell entry asset was not found in index.html');
+  }
+  const assetResponse = await fetch(`${baseUrl}${asset}`);
+  if (!assetResponse.ok) {
+    throw new Error(`Web Shell asset check failed: ${assetResponse.status}`);
+  }
+  console.log(
+    `Bundled OpenWork runtime and Qwen Web Shell ready at ${baseUrl}`,
+  );
   finish();
 }
 
@@ -114,7 +123,7 @@ function finish(error) {
   clearTimeout(timeout);
   child.kill('SIGTERM');
   if (error) {
-    console.error(error.message);
+    console.error(`${error.message}\n${output}`);
     process.exitCode = 1;
   }
 }
@@ -146,8 +155,9 @@ function verifyRuntimeIntegrity() {
     'node',
     'builtAt',
   ]) {
-    if (!manifest[field])
+    if (!manifest[field]) {
       throw new Error(`Runtime manifest is missing ${field}`);
+    }
   }
   const checksums = JSON.parse(
     fs.readFileSync(path.join(runtimeRoot, 'checksums.json'), 'utf8'),
