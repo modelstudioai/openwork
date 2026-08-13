@@ -99,7 +99,7 @@ function testDesktopConfiguration() {
   );
   assert.match(
     migrationHook,
-    /ExecWait '\"\$R0\\Uninstall OpenWork\.exe\" \/currentuser \/S --updated _\?=\$R0'/,
+    /ExecWait '"\$R0\\Uninstall OpenWork\.exe" \/currentuser \/S --updated _\?=\$R0'/,
   );
   assert.equal(
     config.bundle?.resources?.['../runtime/openwork'],
