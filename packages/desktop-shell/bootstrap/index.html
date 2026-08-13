@@ -84,6 +84,72 @@
         width: 58px;
         height: 58px;
         object-fit: contain;
+        filter: drop-shadow(0 14px 24px rgba(88, 63, 226, 0.38));
+      }
+      body[data-state='starting'] {
+        background: #070b12;
+      }
+      body[data-state='starting']::before,
+      body[data-state='starting'] .brand-copy,
+      body[data-state='starting'] .actions,
+      body[data-state='starting'] footer {
+        display: none;
+      }
+      body[data-state='starting'] .shell {
+        width: auto;
+        border: 0;
+        padding: 0;
+        background: none;
+        box-shadow: none;
+        backdrop-filter: none;
+      }
+      body[data-state='starting'] .mark {
+        animation: mark-pulse 1.6s ease-in-out infinite;
+      }
+      body[data-state='starting'] .status {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        border: 0;
+        clip: rect(0, 0, 0, 0);
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+      @keyframes mark-pulse {
+        50% {
+          opacity: 0.55;
+          transform: scale(0.94);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        body[data-state='starting'] .mark {
+          animation: none;
+        }
+        body[data-state='starting'] .status {
+          position: static;
+          width: auto;
+          height: auto;
+          margin: 18px 0 0;
+          overflow: visible;
+          clip: auto;
+          clip-path: none;
+          white-space: normal;
+          grid-template-columns: 1fr;
+          color: #8d98aa;
+          background: none;
+          text-align: center;
+        }
+        body[data-state='starting'] .status > :first-child,
+        body[data-state='starting'] .status > div > :not(#title) {
+          display: none;
+        }
+        body[data-state='starting'] #title {
+          font-size: 13px;
+          font-weight: 500;
+        }
       }
       h1 {
         margin: 0;
@@ -231,7 +297,7 @@
       <section class="shell" aria-live="polite">
         <div class="brand">
           <img class="mark" src="./openwork-symbol.png" alt="" />
-          <div>
+          <div class="brand-copy">
             <h1>OpenWork</h1>
             <p class="eyebrow">Desktop workspace</p>
           </div>

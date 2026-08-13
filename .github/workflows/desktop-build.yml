@@ -55,6 +55,21 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
 
+      - name: 'Configure bundled Node.js cache'
+        id: 'node-cache-path'
+        shell: 'bash'
+        run: |
+          cache_path="$RUNNER_TEMP/openwork-desktop-node-cache"
+          echo "OPENWORK_DESKTOP_NODE_CACHE_DIR=$cache_path" >> "$GITHUB_ENV"
+          echo "path=$cache_path" >> "$GITHUB_OUTPUT"
+
+      - name: 'Restore bundled Node.js cache'
+        uses: 'actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830' # v4
+        id: 'node-cache'
+        with:
+          path: '${{ steps.node-cache-path.outputs.path }}'
+          key: "openwork-desktop-node-v1-${{ matrix.target }}-${{ hashFiles('.nvmrc') }}"
+
       - name: 'Set up Rust'
         uses: 'dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4' # stable
         with:
@@ -112,6 +127,13 @@ jobs:
         env:
           OPENWORK_DESKTOP_TARGET: '${{ matrix.target }}'
         run: 'npm run build:runtime --prefix packages/desktop-shell --workspaces=false'
+
+      - name: 'Save bundled Node.js cache'
+        uses: 'actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830' # v4
+        if: "${{ steps.node-cache.outputs.cache-hit != 'true' }}"
+        with:
+          path: '${{ steps.node-cache-path.outputs.path }}'
+          key: "openwork-desktop-node-v1-${{ matrix.target }}-${{ hashFiles('.nvmrc') }}"
 
       - name: 'Run desktop tests'
         run: 'npm test --prefix packages/desktop-shell --workspaces=false'

@@ -16,6 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 use tauri::menu::{AboutMetadata, Menu, MenuItem, MenuItemBuilder, SubmenuBuilder};
 use tauri::webview::{DownloadEvent, NewWindowResponse, WebviewBuilder, WebviewWindowBuilder};
 use tauri::{
@@ -25,7 +26,7 @@ use tauri::{
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_notification::NotificationExt;
-use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_updater::{Update, UpdaterExt};
 use url::Url;
 
 #[cfg(debug_assertions)]
@@ -43,6 +44,7 @@ static FULLSCREEN_HIDE_GENERATION: AtomicU64 = AtomicU64::new(0);
 // packages/desktop/packages/shared/src/config/storage.ts: ~/Documents/OpenWork,
 // relocatable through OPENWORK_DEFAULT_WORKSPACE_DIR (see default_workspace).
 const DEFAULT_WORKSPACE_DIRECTORY: &str = "OpenWork";
+const UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(3);
 static PENDING_DEEP_LINKS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
@@ -475,6 +477,10 @@ fn bootstrap_state(
     require_bootstrap_origin(&webview)?;
     let starting = state.starting.load(Ordering::SeqCst) != 0;
     let running = lock(&state.runtime).is_some();
+    let workspace = bootstrap_workspace(
+        lock(&state.last_workspace).clone(),
+        state.settings.workspace(),
+    );
     Ok(BootstrapState {
         desktop_version: env!("CARGO_PKG_VERSION").to_string(),
         status: if running {
@@ -484,12 +490,18 @@ fn bootstrap_state(
         } else {
             "idle"
         },
-        workspace: state
-            .settings
-            .workspace()
-            .map(|path| path.to_string_lossy().into_owned()),
+        workspace: workspace.map(|path| path.to_string_lossy().into_owned()),
         error: lock(&state.last_error).clone(),
     })
+}
+
+fn bootstrap_workspace(
+    last_workspace: Option<(PathBuf, bool)>,
+    persisted_workspace: Option<PathBuf>,
+) -> Option<PathBuf> {
+    last_workspace
+        .map(|(workspace, _)| workspace)
+        .or(persisted_workspace)
 }
 
 #[tauri::command]
@@ -923,15 +935,7 @@ async fn check_for_updates(
     state: State<'_, ApplicationState>,
 ) -> Result<Option<String>, String> {
     require_runtime_origin(&webview, &state)?;
-    let updater = webview
-        .app_handle()
-        .updater()
-        .map_err(|error| format!("Updater unavailable: {error}"))?;
-    match updater
-        .check()
-        .await
-        .map_err(|error| format!("Update check failed: {error}"))?
-    {
+    match check_for_update(webview.app_handle()).await? {
         Some(update) => Ok(Some(update.version)),
         None => Ok(None),
     }
@@ -944,18 +948,24 @@ async fn install_update(
 ) -> Result<(), String> {
     require_runtime_origin(&webview, &state)?;
     let app = webview.app_handle().clone();
-    let update = app
-        .updater()
-        .map_err(|error| format!("Updater unavailable: {error}"))?
-        .check()
-        .await
-        .map_err(|error| format!("Update check failed: {error}"))?
+    let update = check_for_update(&app)
+        .await?
         .ok_or_else(|| "OpenWork is already up to date".to_string())?;
     update
         .download_and_install(|_, _| {}, || {})
         .await
         .map_err(|error| format!("Update installation failed: {error}"))?;
     app.restart()
+}
+
+async fn check_for_update(app: &AppHandle) -> Result<Option<Update>, String> {
+    app.updater_builder()
+        .timeout(UPDATE_CHECK_TIMEOUT)
+        .build()
+        .map_err(|error| format!("Updater unavailable: {error}"))?
+        .check()
+        .await
+        .map_err(|error| format!("Update check failed: {error}"))
 }
 
 #[tauri::command]
@@ -1251,6 +1261,7 @@ fn should_restore_main_window(has_visible_windows: bool, main_needs_restore: boo
 
 fn show_local_control_window(app: &AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("local-control") {
+        window.center().map_err(|error| error.to_string())?;
         window.show().map_err(|error| error.to_string())?;
         window.set_focus().map_err(|error| error.to_string())?;
         return Ok(());
@@ -1264,6 +1275,7 @@ fn show_local_control_window(app: &AppHandle) -> Result<(), String> {
     .inner_size(440.0, 500.0)
     .min_inner_size(400.0, 500.0)
     .resizable(false)
+    .center()
     .build()
     .map(|_| ())
     .map_err(|error| format!("Failed to open Local Control: {error}"))
@@ -1434,7 +1446,7 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::{
-        browser_bounds_fit, default_workspace_override_dir, default_workspace_path,
+        bootstrap_workspace, browser_bounds_fit, default_workspace_override_dir, default_workspace_path,
         ensure_workspace_dir, is_allowed_navigation, is_bootstrap_url, is_safe_deep_link,
         is_safe_external_url, is_same_origin, load_pet_from_root, origin_of, parse_browser_url,
         BOOTSTRAP_URL,
@@ -1451,6 +1463,21 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::Mutex;
     use url::Url;
+
+    #[test]
+    fn bootstrap_prefers_the_workspace_being_started() {
+        let attempted = PathBuf::from("/tmp/attempted");
+        let persisted = PathBuf::from("/tmp/persisted");
+        assert_eq!(
+            bootstrap_workspace(Some((attempted.clone(), false)), Some(persisted.clone())),
+            Some(attempted),
+        );
+        assert_eq!(
+            bootstrap_workspace(None, Some(persisted.clone())),
+            Some(persisted)
+        );
+        assert_eq!(bootstrap_workspace(None, None), None);
+    }
 
     #[cfg(target_os = "macos")]
     #[test]

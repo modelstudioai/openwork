@@ -12,12 +12,16 @@ const retry = document.querySelector('#retry');
 const logs = document.querySelector('#logs');
 const version = document.querySelector('#version');
 
+let currentWorkspace = '';
+let snapshotOverrideStatus;
+
 function setWorkspace(path) {
   workspace.hidden = !path;
   workspace.textContent = path || '';
 }
 
 function setStatus(kind, heading, message, failure = '') {
+  document.body.dataset.state = kind;
   title.textContent = heading;
   detail.textContent = message;
   pulse.className = `pulse ${kind === 'starting' ? '' : kind}`;
@@ -26,10 +30,12 @@ function setStatus(kind, heading, message, failure = '') {
   retry.hidden = kind !== 'error';
   choose.hidden = kind === 'starting';
   choose.disabled = kind === 'starting';
+  setWorkspace(kind === 'starting' ? '' : currentWorkspace);
 }
 
 async function chooseWorkspace() {
   if (!invoke) return;
+  snapshotOverrideStatus = 'starting';
   setStatus(
     'starting',
     'Opening workspace',
@@ -37,7 +43,7 @@ async function chooseWorkspace() {
   );
   try {
     const path = await invoke('choose_workspace');
-    if (path) setWorkspace(path);
+    if (path) currentWorkspace = path;
     else
       setStatus('idle', 'Choose another workspace', 'No folder was selected.');
   } catch (failure) {
@@ -52,6 +58,7 @@ async function chooseWorkspace() {
 
 async function retryRuntime() {
   if (!invoke) return;
+  snapshotOverrideStatus = 'starting';
   setStatus(
     'starting',
     'Restarting OpenWork',
@@ -100,7 +107,8 @@ async function initialize() {
 
   await Promise.all([
     listen('runtime-starting', ({ payload }) => {
-      setWorkspace(payload);
+      snapshotOverrideStatus = 'starting';
+      currentWorkspace = String(payload || '');
       setStatus(
         'starting',
         'Starting OpenWork',
@@ -108,6 +116,7 @@ async function initialize() {
       );
     }),
     listen('runtime-failed', ({ payload }) => {
+      snapshotOverrideStatus = 'failed';
       setStatus(
         'error',
         'OpenWork could not start',
@@ -119,7 +128,11 @@ async function initialize() {
 
   const state = await invoke('bootstrap_state');
   version.textContent = `Desktop ${state.desktopVersion}`;
-  setWorkspace(state.workspace);
+  currentWorkspace ||= String(state.workspace || '');
+  if (snapshotOverrideStatus) {
+    if (snapshotOverrideStatus === 'failed') setWorkspace(currentWorkspace);
+    return;
+  }
   if (state.status === 'starting') {
     setStatus(
       'starting',

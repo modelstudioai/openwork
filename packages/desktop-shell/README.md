@@ -29,6 +29,10 @@ npm run dev --workspaces=false
 Set `OPENWORK_UV_DOWNLOAD_ROOT` to a trusted mirror of the pinned uv release
 directory when GitHub release assets are unavailable.
 
+Set `OPENWORK_DESKTOP_NODE_CACHE_DIR` to reuse a verified Node.js archive
+between runtime builds. Cached archives are checked against Node.js release
+checksums before use.
+
 The install and runtime build are only needed the first time or after dependencies/runtime sources change. For later runs, `npm run dev --workspaces=false` is enough. Run `npm test --workspaces=false` for the Rust checks.
 
 Use `OPENWORK_DESKTOP_WORKSPACE=/absolute/path` to override the initial workspace. The app otherwise restores its saved primary workspace or creates `~/Documents/OpenWork` on first launch. `OPENWORK_DEFAULT_WORKSPACE_DIR=/absolute/path` relocates that first-launch default, matching the Electron shell. Add and switch project workspaces from the Web Shell after startup.

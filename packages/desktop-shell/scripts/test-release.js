@@ -20,11 +20,37 @@ try {
   testDesktopConfiguration();
   testMacosPermissions();
   testReleaseWorkflow();
+  testUpstreamDesktopHardening();
   testChecksumRefresh(path.join(root, 'checksums'));
   testVersionSynchronization(path.join(root, 'version'));
   console.log('OpenWork desktop release contract checks passed.');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
+}
+
+function testUpstreamDesktopHardening() {
+  const bootstrap = fs.readFileSync(
+    path.join(packageDir, 'bootstrap', 'bootstrap.js'),
+    'utf8',
+  );
+  const runtime = fs.readFileSync(
+    path.join(packageDir, 'scripts', 'prepare-runtime.js'),
+    'utf8',
+  );
+  const main = fs.readFileSync(
+    path.join(packageDir, 'src-tauri', 'src', 'main.rs'),
+    'utf8',
+  );
+  assert.match(bootstrap, /kind === 'starting' \? '' : currentWorkspace/);
+  assert.match(runtime, /OPENWORK_DESKTOP_NODE_CACHE_DIR/);
+  assert.ok(
+    runtime.indexOf('replaceRuntime();') > runtime.indexOf('writeChecksums();'),
+  );
+  assert.match(main, /Duration::from_secs\(3\)/);
+  assert.match(
+    main,
+    /app\.updater_builder\(\)\s*\.timeout\(UPDATE_CHECK_TIMEOUT\)/,
+  );
 }
 
 function testDesktopConfiguration() {
