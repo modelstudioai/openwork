@@ -882,6 +882,26 @@ describe('runChannelDaemonWorker', () => {
     expect(mockRouterClearAll).not.toHaveBeenCalled();
   });
 
+  it('forwards a terminal adapter disconnect to the worker owner', async () => {
+    const onTerminalDisconnect = vi.fn();
+    const handle = await runChannelDaemonWorker({
+      daemonUrl: 'http://127.0.0.1:4170',
+      workspace: '/workspace',
+      selection: { mode: 'names', names: ['telegram'] },
+      loadDaemonSdk: async () => createSdk(),
+      onTerminalDisconnect,
+    });
+    const options = mockCreateChannel.mock.calls[0]![3] as {
+      onTerminalDisconnect(error: Error): void;
+    };
+    const error = new Error('terminal');
+
+    options.onTerminalDisconnect(error);
+
+    expect(onTerminalDisconnect).toHaveBeenCalledWith('telegram', error);
+    await handle.close();
+  });
+
   it('starts a workspace-scoped loop runtime for connected channels', async () => {
     const sdk = createSdk();
     const ready = vi.fn();
@@ -2102,6 +2122,38 @@ describe('daemonWorkerCommand', () => {
 
       expect(mockBridgeStop).toHaveBeenCalled();
       expect(exit).toHaveBeenCalledWith(0);
+    } finally {
+      restoreSend();
+    }
+  });
+
+  it('exits for supervisor restart after a terminal adapter disconnect', async () => {
+    const exit = mockProcessExitNoThrow();
+    const send = vi.fn();
+    const restoreSend = stubProcessSend(send as NodeJS.Process['send']);
+    vi.stubEnv('QWEN_CHANNEL_DAEMON_WORKER', 'worker-token');
+    vi.stubEnv('QWEN_DAEMON_URL', 'http://127.0.0.1:4170');
+    vi.stubEnv('QWEN_DAEMON_WORKSPACE', '/workspace');
+
+    try {
+      const handler = daemonWorkerCommand.handler({
+        channel: ['telegram'],
+        _: [],
+        $0: 'qwen',
+      });
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'ready' }),
+        );
+      });
+      const options = mockCreateChannel.mock.calls[0]![3] as {
+        onTerminalDisconnect(error: Error): void;
+      };
+      options.onTerminalDisconnect(new Error('logged out'));
+      await handler;
+
+      expect(mockBridgeStop).toHaveBeenCalled();
+      expect(exit).toHaveBeenCalledWith(1);
     } finally {
       restoreSend();
     }

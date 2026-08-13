@@ -9990,6 +9990,31 @@ describe('App session callbacks', () => {
     );
   });
 
+  it('opens a recent session in its persisted workspace', async () => {
+    mockWorkspace.capabilities = {
+      workspaces: [
+        { id: 'primary', cwd: '/work/primary', primary: true },
+        { id: 'secondary', cwd: '/work/secondary', primary: false },
+      ],
+    };
+    renderApp();
+    await flush();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('qwen:open-session', {
+          detail: { sessionId: 'secondary-session', workspaceId: 'secondary' },
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(mockSessionActions.loadSession).toHaveBeenCalledWith(
+      'secondary-session',
+      { workspaceCwd: '/work/secondary' },
+    );
+  });
+
   it('does not steal focus when an approval appears before deferred session focus', async () => {
     vi.useFakeTimers();
     const { container, rerender } = renderApp();

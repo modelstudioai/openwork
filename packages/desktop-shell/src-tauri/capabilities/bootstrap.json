@@ -1,14 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "bootstrap",
-  "description": "Allows the local bootstrap page to subscribe to desktop lifecycle events.",
-  "webviews": ["main", "local-control", "pet"],
-  "remote": {
-    "urls": ["http://127.0.0.1:*"]
-  },
+  "description": "Allows local bootstrap pages to manage the desktop runtime.",
+  "webviews": ["main", "local-control"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
-    "core:window:allow-start-dragging"
+    "allow-bootstrap-state",
+    "allow-choose-workspace",
+    "allow-local-control-status",
+    "allow-enable-local-control",
+    "allow-disable-local-control",
+    "allow-open-logs",
+    "allow-restart-runtime"
   ]
 }

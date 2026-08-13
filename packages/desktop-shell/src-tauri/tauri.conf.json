@@ -18,7 +18,7 @@
         "enable": true,
         "scope": ["$HOME/.qwen/pets/**"]
       },
-      "capabilities": ["bootstrap"]
+      "capabilities": ["bootstrap", "runtime", "pet"]
     }
   },
   "bundle": {
@@ -70,7 +70,7 @@
     },
     "updater": {
       "endpoints": [
-        "https://github.com/modelstudioai/openwork/releases/latest/download/latest.json"
+        "https://github.com/modelstudioai/openwork/releases/download/desktop-latest/latest.json"
       ],
       "pubkey": ""
     }

@@ -4,5 +4,6 @@ self-hosted-runner:
     - 'ecs-win'
     - 'ecs-update-sg'
     - 'ecs-update-64c'
+    - 'macos-15-intel'
 
 config-variables: null

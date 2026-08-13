@@ -20,6 +20,7 @@ try {
   testDesktopConfiguration();
   testMacosPermissions();
   testReleaseWorkflow();
+  testChecksumRefresh(path.join(root, 'checksums'));
   testVersionSynchronization(path.join(root, 'version'));
   console.log('OpenWork desktop release contract checks passed.');
 } finally {
@@ -40,14 +41,35 @@ function testDesktopConfiguration() {
   assert.equal(config.build.frontendDist, '../bootstrap');
   assert.equal(config.app?.withGlobalTauri, true);
   assert.equal(config.app?.macOSPrivateApi, true);
-  assert.deepEqual(config.app?.security?.capabilities, ['bootstrap']);
-  const capability = JSON.parse(
-    fs.readFileSync(
-      path.join(packageDir, 'src-tauri', 'capabilities', 'bootstrap.json'),
-      'utf8',
-    ),
+  assert.deepEqual(config.app?.security?.capabilities, [
+    'bootstrap',
+    'runtime',
+    'pet',
+  ]);
+  const capabilities = Object.fromEntries(
+    ['bootstrap', 'runtime', 'pet'].map((name) => [
+      name,
+      JSON.parse(
+        fs.readFileSync(
+          path.join(packageDir, 'src-tauri', 'capabilities', `${name}.json`),
+          'utf8',
+        ),
+      ),
+    ]),
   );
-  assert.deepEqual(capability.webviews, ['main', 'local-control', 'pet']);
+  assert.deepEqual(capabilities.bootstrap.webviews, ['main', 'local-control']);
+  assert.ok(
+    capabilities.bootstrap.permissions.includes('core:event:allow-listen'),
+  );
+  assert.ok(
+    capabilities.bootstrap.permissions.includes('core:event:allow-unlisten'),
+  );
+  assert.deepEqual(capabilities.runtime.webviews, ['main']);
+  assert.equal(capabilities.runtime.local, false);
+  assert.deepEqual(capabilities.runtime.remote, {
+    urls: ['http://127.0.0.1:*'],
+  });
+  assert.deepEqual(capabilities.pet.webviews, ['pet']);
   assert.deepEqual(config.app?.security?.assetProtocol, {
     enable: true,
     scope: ['$HOME/.qwen/pets/**'],
@@ -61,7 +83,7 @@ function testDesktopConfiguration() {
     'openwork',
   ]);
   assert.deepEqual(config.plugins?.updater?.endpoints, [
-    'https://github.com/modelstudioai/openwork/releases/latest/download/latest.json',
+    'https://github.com/modelstudioai/openwork/releases/download/desktop-latest/latest.json',
   ]);
   assert.equal(typeof config.plugins?.updater?.pubkey, 'string');
   assert.equal(
@@ -106,7 +128,15 @@ function testReleaseWorkflow() {
     'APPLE_CERTIFICATE',
     'Import-PfxCertificate',
     'createUpdaterArtifacts: publish',
-    "uploadUpdaterJson: '${{ inputs.publish }}'",
+    'Run desktop tests',
+    'Verify bundled runtime',
+    'Smoke packaged application',
+    'create-desktop-update-manifest.mjs',
+    'SHA256SUMS.txt',
+    'desktop-latest',
+    'Sign bundled runtime binaries (macOS)',
+    'Verify Windows signature',
+    '.app.tar.gz',
   ]) {
     assert.ok(
       workflow.includes(expected),
@@ -129,6 +159,25 @@ function testReleaseWorkflow() {
   assert.match(publishJob, /secrets: '?inherit'?/);
   assert.doesNotMatch(workflow, /uses: [^\n]+@(v\d|stable)\b/);
   assert.doesNotMatch(workflow, /push --force|force-with-lease/);
+}
+
+function testChecksumRefresh(directory) {
+  fs.mkdirSync(path.join(directory, 'nested'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'one.txt'), 'one');
+  fs.writeFileSync(path.join(directory, 'nested', 'two.txt'), 'two');
+  execFileSync(
+    process.execPath,
+    [
+      path.join(packageDir, 'scripts', 'prepare-runtime.js'),
+      '--refresh-checksums',
+      directory,
+    ],
+    { stdio: 'pipe' },
+  );
+  const checksums = JSON.parse(
+    fs.readFileSync(path.join(directory, 'checksums.json'), 'utf8'),
+  );
+  assert.deepEqual(Object.keys(checksums), ['nested/two.txt', 'one.txt']);
 }
 
 function testMacosPermissions() {

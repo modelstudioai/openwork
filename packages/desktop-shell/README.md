@@ -39,8 +39,8 @@ Custom desktop pets are discovered from `~/.qwen/pets/<pet-id>/pet.json`; the ma
 
 ## Releases
 
-Run the **Desktop Release** workflow with a semantic version. Dry runs upload installers as workflow artifacts; published runs must start from `main` and create `openwork-v<version>` with the updater manifest and signatures. The matrix builds Apple Silicon and Intel macOS packages, Windows x64 installers, and Linux x64 AppImage/deb packages.
+Run the **Desktop Release** workflow with a semantic version. Dry runs upload installers as workflow artifacts; published runs must start from `main` and create `openwork-v<version>` with the updater manifest and signatures. The matrix builds Apple Silicon and Intel macOS packages, Windows x64 installers, and Linux x64 AppImage/deb packages. Each matrix job runs the Rust and release-contract tests, verifies the bundled runtime, and starts the packaged application before publishing.
 
-Published releases require `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PUBLIC_KEY`; set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` when the key is encrypted. macOS additionally requires `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_ISSUER`, `APPLE_API_KEY`, and `APPLE_API_KEY_P8_BASE64`; the existing `MAC_CSC_*` and `APPLE_NOTARY_*` names remain accepted. Windows signing is optional: provide a base64 PFX or HTTPS certificate URL in `WINDOWS_CERTIFICATE` plus `WINDOWS_CERTIFICATE_PASSWORD`; the existing `WIN_CSC_*` names remain accepted.
+Published releases require `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PUBLIC_KEY`; set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` when the key is encrypted. macOS additionally requires `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_ISSUER`, `APPLE_API_KEY`, and `APPLE_API_KEY_P8_BASE64`; the existing `MAC_CSC_*` and `APPLE_NOTARY_*` names remain accepted. Windows requires a base64 PFX or HTTPS certificate URL in `WINDOWS_CERTIFICATE` plus `WINDOWS_CERTIFICATE_PASSWORD`; the existing `WIN_CSC_*` names remain accepted.
 
 The updater public key is injected into release builds. Unsigned local and dry-run builds can compile and run, but cannot install release updates.

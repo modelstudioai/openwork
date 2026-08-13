@@ -55,6 +55,7 @@ export class WhatsAppChannel extends ChannelBase {
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private connected = false;
+  private hasConnected = false;
   private rejectConnect: ((error: Error) => void) | null = null;
   private readonly sentIds = new Set<string>();
   private readonly phoneNumber: string;
@@ -80,6 +81,7 @@ export class WhatsAppChannel extends ChannelBase {
 
   async connect(): Promise<void> {
     this.stopped = false;
+    this.hasConnected = false;
     const authDir =
       this.stateDir ??
       join(homedir(), '.qwen', 'channels', this.name, 'whatsapp');
@@ -109,9 +111,12 @@ export class WhatsAppChannel extends ChannelBase {
         resolve();
       };
       const failed = (error: Error) => {
-        if (!this.rejectConnect) return;
-        this.rejectConnect = null;
-        reject(error);
+        if (this.rejectConnect) {
+          this.rejectConnect = null;
+          reject(error);
+        } else if (this.hasConnected) {
+          this.onTerminalDisconnect?.(error);
+        }
       };
       const boot = () => {
         if (this.stopped) return;
@@ -135,6 +140,7 @@ export class WhatsAppChannel extends ChannelBase {
         socket.ev.on('connection.update', ({ connection, lastDisconnect }) => {
           if (connection === 'open') {
             this.connected = true;
+            this.hasConnected = true;
             this.reconnectAttempts = 0;
             connected();
             process.stderr.write(

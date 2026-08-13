@@ -1,7 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DaemonWorkspaceProvider } from '@qwen-code/webui/daemon-react-sdk';
+import {
+  DaemonWorkspaceProvider,
+  type DaemonStreamingState,
+} from '@qwen-code/webui/daemon-react-sdk';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RootErrorFallback } from './components/RootErrorFallback';
 import { WorkspaceSessionProvider } from './components/WorkspaceSessionProvider';
@@ -136,7 +139,8 @@ function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
   const [workspaceId] = useState<string | undefined>(() =>
     getWorkspaceIdFromUrl(),
   );
-  const [activeTurns, setActiveTurns] = useState(0);
+  const [streamingState, setStreamingState] =
+    useState<DaemonStreamingState>('idle');
   const baseUrl = DAEMON_BASE_URL || window.location.origin;
   useEffect(() => {
     const handleHydration = (event: Event) => {
@@ -203,13 +207,11 @@ function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
             shellRef,
             composerRef,
             onSessionChange: (event) => {
-              if (event.type === 'submit') {
-                setActiveTurns((count) => count + 1);
-              } else if (event.type === 'turn_complete') {
-                setActiveTurns((count) => Math.max(0, count - 1));
+              if (event.type === 'turn_complete') {
                 if (document.hidden) notifyOpenWorkTurnComplete();
               }
             },
+            onStreamingStateChange: setStreamingState,
             sidebar: true,
             header: {
               items: ['title', 'environment', 'rightPanel'],
@@ -233,7 +235,7 @@ function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
         />
         <OpenWorkDesktopLayer
           shellRef={shellRef}
-          turnActive={activeTurns > 0}
+          turnActive={streamingState !== 'idle'}
         />
       </DaemonWorkspaceProvider>
     </ErrorBoundary>

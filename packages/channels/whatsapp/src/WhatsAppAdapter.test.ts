@@ -57,7 +57,9 @@ afterEach(async () => {
   await rm(stateDir, { recursive: true, force: true });
 });
 
-function channel(): WhatsAppChannel {
+function channel(
+  onTerminalDisconnect?: (error: Error) => void,
+): WhatsAppChannel {
   const config = {
     type: 'whatsapp',
     phoneNumber: '15551234567',
@@ -78,7 +80,10 @@ function channel(): WhatsAppChannel {
     off: vi.fn(),
     emit: vi.fn(),
   } as unknown as ChannelAgentBridge;
-  return new WhatsAppChannel('test', config, bridge, { stateDir });
+  return new WhatsAppChannel('test', config, bridge, {
+    stateDir,
+    onTerminalDisconnect,
+  });
 }
 
 describe('WhatsApp connection lifecycle', () => {
@@ -125,4 +130,42 @@ describe('WhatsApp connection lifecycle', () => {
       await adapter.disconnect();
     },
   );
+
+  it('reports a permanent disconnect after becoming ready', async () => {
+    const onTerminalDisconnect = vi.fn();
+    const adapter = channel(onTerminalDisconnect);
+    const connecting = adapter.connect();
+    await vi.waitFor(() => expect(baileys.makeSocket).toHaveBeenCalledOnce());
+    baileys.handlers.get('connection.update')?.({ connection: 'open' });
+    await connecting;
+
+    baileys.handlers.get('connection.update')?.({
+      connection: 'close',
+      lastDisconnect: { error: { output: { statusCode: 401 } } },
+    });
+
+    expect(onTerminalDisconnect).toHaveBeenCalledOnce();
+    expect(onTerminalDisconnect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('logged out'),
+      }),
+    );
+    await adapter.disconnect();
+  });
+
+  it('does not report an initial connection failure as a later disconnect', async () => {
+    const onTerminalDisconnect = vi.fn();
+    const adapter = channel(onTerminalDisconnect);
+    const connecting = adapter.connect();
+    await vi.waitFor(() => expect(baileys.makeSocket).toHaveBeenCalledOnce());
+
+    baileys.handlers.get('connection.update')?.({
+      connection: 'close',
+      lastDisconnect: { error: { output: { statusCode: 401 } } },
+    });
+
+    await expect(connecting).rejects.toThrow('logged out');
+    expect(onTerminalDisconnect).not.toHaveBeenCalled();
+    await adapter.disconnect();
+  });
 });

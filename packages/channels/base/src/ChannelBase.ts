@@ -212,6 +212,8 @@ export interface ChannelBaseOptions {
   proxy?: string;
   /** Adapter-owned persistent state directory. */
   stateDir?: string;
+  /** Called when an adapter becomes permanently unavailable after connecting. */
+  onTerminalDisconnect?: (error: Error) => void;
   channelMemory?: ChannelMemoryCallbacks;
   memoryIntentClassifier?: ChannelMemoryIntentClassifier;
   channelMemoryRecallObserver?: (
@@ -373,6 +375,7 @@ export abstract class ChannelBase {
   protected proxy?: string;
   /** Adapter-owned persistent state directory, when supplied by the runtime. */
   protected readonly stateDir?: string;
+  protected readonly onTerminalDisconnect?: (error: Error) => void;
   private readonly channelMemory?: ChannelMemoryCallbacks;
   private readonly memoryIntentClassifier?: ChannelMemoryIntentClassifier;
   private readonly channelMemoryRecallObserver?: (
@@ -810,6 +813,7 @@ export abstract class ChannelBase {
     this.bridge = bridge;
     this.proxy = options?.proxy;
     this.stateDir = options?.stateDir;
+    this.onTerminalDisconnect = options?.onTerminalDisconnect;
     this.identity = Object.freeze(this.resolveIdentity(name, config));
     this.memoryScope = Object.freeze(this.resolveMemoryScope(name, config));
     this.channelMemory = options?.channelMemory;

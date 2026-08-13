@@ -7396,23 +7396,46 @@ export function App({
     const handler = (e: Event) => {
       const detail = (
         e as CustomEvent<
-          string | { sessionId?: unknown; workspaceCwd?: unknown }
+          | string
+          | {
+              sessionId?: unknown;
+              workspaceId?: unknown;
+              workspaceCwd?: unknown;
+            }
         >
       ).detail;
       const sessionId = typeof detail === 'string' ? detail : detail?.sessionId;
-      const workspaceCwd =
+      let workspaceCwd =
         typeof detail === 'object' &&
         detail !== null &&
         typeof detail.workspaceCwd === 'string'
           ? detail.workspaceCwd
           : undefined;
+      const workspaceId =
+        typeof detail === 'object' &&
+        detail !== null &&
+        typeof detail.workspaceId === 'string'
+          ? detail.workspaceId
+          : undefined;
+      if (workspaceCwd === undefined && workspaceId) {
+        workspaceCwd = workspaces.find(
+          (workspace) => workspace.id === workspaceId,
+        )?.cwd;
+        if (workspaceCwd === undefined) {
+          reportError(
+            new Error(`Workspace ${workspaceId} is no longer available.`),
+            'Failed to open session',
+          );
+          return;
+        }
+      }
       if (typeof sessionId === 'string' && sessionId) {
         handleOpenSessionFromOverview(sessionId, workspaceCwd);
       }
     };
     window.addEventListener('qwen:open-session', handler);
     return () => window.removeEventListener('qwen:open-session', handler);
-  }, [handleOpenSessionFromOverview]);
+  }, [handleOpenSessionFromOverview, reportError, workspaces]);
 
   useEffect(() => {
     if (

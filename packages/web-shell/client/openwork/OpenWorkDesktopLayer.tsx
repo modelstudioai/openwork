@@ -188,8 +188,12 @@ function resizeBrowserDock(): void {
   }).catch(() => undefined);
 }
 
-function openSession(id: string): void {
-  window.dispatchEvent(new CustomEvent('qwen:open-session', { detail: id }));
+function openSession(id: string, workspaceId?: string): void {
+  window.dispatchEvent(
+    new CustomEvent('qwen:open-session', {
+      detail: workspaceId ? { sessionId: id, workspaceId } : id,
+    }),
+  );
 }
 
 function parseDeepLink(value: string): void {
@@ -981,7 +985,7 @@ export function OpenWorkDesktopLayer({
                   key={recent.id}
                   type="button"
                   onClick={() => {
-                    openSession(recent.id);
+                    openSession(recent.id, recent.workspaceId);
                     setPaletteOpen(false);
                   }}
                 >

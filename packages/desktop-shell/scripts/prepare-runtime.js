@@ -18,6 +18,15 @@ const sourceRoot = process.env.OPENWORK_ROOT?.trim()
   : repoRoot;
 const runtimeDir = path.join(packageDir, 'runtime');
 const packageRoot = path.join(runtimeDir, 'openwork');
+const refreshChecksums = process.argv.indexOf('--refresh-checksums');
+if (refreshChecksums !== -1) {
+  const root = process.argv[refreshChecksums + 1]
+    ? path.resolve(process.argv[refreshChecksums + 1])
+    : packageRoot;
+  writeChecksums(root);
+  console.log(`Refreshed OpenWork runtime checksums at ${root}`);
+  process.exit(0);
+}
 const libDir = path.join(packageRoot, 'lib');
 const nodeDir = path.join(packageRoot, 'node');
 const toolsDir = path.join(packageRoot, 'tools');
@@ -284,7 +293,7 @@ function uvArchiveName(desktopTarget) {
 }
 
 async function download(url, destination) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(300_000) });
   if (!response.ok || !response.body) {
     throw new Error(`Failed to download ${url}: HTTP ${response.status}`);
   }
@@ -372,10 +381,10 @@ function gitCommit(directory) {
   }).trim();
 }
 
-function writeChecksums() {
+function writeChecksums(root = packageRoot) {
   const checksums = {};
-  for (const file of runtimeFiles(packageRoot)) {
-    const relative = path.relative(packageRoot, file).split(path.sep).join('/');
+  for (const file of runtimeFiles(root)) {
+    const relative = path.relative(root, file).split(path.sep).join('/');
     if (relative === 'checksums.json') continue;
     checksums[relative] = crypto
       .createHash('sha256')
@@ -383,7 +392,7 @@ function writeChecksums() {
       .digest('hex');
   }
   fs.writeFileSync(
-    path.join(packageRoot, 'checksums.json'),
+    path.join(root, 'checksums.json'),
     `${JSON.stringify(checksums, null, 2)}\n`,
   );
 }
