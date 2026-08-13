@@ -32,7 +32,9 @@ const target = desktopTarget();
 const skipBuild = process.env.OPENWORK_DESKTOP_SKIP_BUILD === '1';
 
 const npm = process.env.npm_execpath;
-if (!npm) throw new Error('npm_execpath is unavailable. Run through npm.');
+if (!skipBuild && !npm) {
+  throw new Error('npm_execpath is unavailable. Run through npm.');
+}
 
 if (!skipBuild) {
   execFileSync(process.execPath, [npm, 'run', 'build', '--', '--cli-only'], {
@@ -83,6 +85,7 @@ fs.mkdirSync(libDir, { recursive: true });
 fs.writeFileSync(path.join(packageRoot, '.gitkeep'), '');
 fs.mkdirSync(binDir, { recursive: true });
 copyDirectory(distDir, libDir);
+installRuntimeDependencies(libDir, target);
 await installNodeRuntime(nodeDir, target);
 writeLaunchers(target);
 copyRequiredFile(
@@ -219,6 +222,25 @@ function verifyChecksum(archivePath, archiveName, checksums) {
 
 function extractNodeArchive(archivePath, destination) {
   execFileSync('tar', ['-xf', archivePath, '-C', destination]);
+}
+
+function installRuntimeDependencies(destination, desktopTarget) {
+  const [platform, arch] = desktopTarget.split('-');
+  const command = npm ? process.execPath : 'npm';
+  const args = [
+    ...(npm ? [npm] : []),
+    'install',
+    '--omit=dev',
+    '--ignore-scripts',
+    '--no-package-lock',
+    '--no-audit',
+    '--no-fund',
+    '--os',
+    platform,
+    '--cpu',
+    arch,
+  ];
+  execFileSync(command, args, { cwd: destination, stdio: 'inherit' });
 }
 
 function writeLaunchers(desktopTarget) {

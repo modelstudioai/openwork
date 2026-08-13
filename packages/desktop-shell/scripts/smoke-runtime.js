@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -174,5 +174,21 @@ function verifyRuntimeIntegrity() {
     if (actual !== expected) {
       throw new Error(`Bundled runtime checksum mismatch: ${relative}`);
     }
+  }
+  for (const packageName of [
+    '@lydell/node-pty',
+    '@qwen-code/audio-capture',
+    '@teddyzhu/clipboard',
+    'sharp',
+  ]) {
+    execFileSync(
+      nodePath,
+      [
+        '--input-type=module',
+        '--eval',
+        `await import(${JSON.stringify(packageName)})`,
+      ],
+      { cwd: path.join(runtimeRoot, 'lib'), stdio: 'pipe' },
+    );
   }
 }

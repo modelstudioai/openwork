@@ -344,8 +344,8 @@ fn rewrite_request(
     }
     let header = std::str::from_utf8(header_bytes).map_err(|_| 400_u16)?;
     let public_authority = public_origin.strip_prefix("http://").ok_or(500_u16)?;
-    let pair_protocol = format!("openwork-bearer.{}", URL_SAFE_NO_PAD.encode(pair_token));
-    let runtime_protocol = format!("openwork-bearer.{}", URL_SAFE_NO_PAD.encode(runtime_token));
+    let pair_protocol = format!("qwen-bearer.{}", URL_SAFE_NO_PAD.encode(pair_token));
+    let runtime_protocol = format!("qwen-bearer.{}", URL_SAFE_NO_PAD.encode(runtime_token));
     let websocket = header.lines().any(|line| {
         line.split_once(':').is_some_and(|(name, value)| {
             name.eq_ignore_ascii_case("upgrade") && value.trim().eq_ignore_ascii_case("websocket")
@@ -387,7 +387,7 @@ fn rewrite_request(
             for protocol in value.split(',').map(str::trim) {
                 if protocol == pair_protocol {
                     protocols.push(runtime_protocol.as_str());
-                } else if protocol.contains("openwork-bearer.") {
+                } else if protocol.contains("qwen-bearer.") {
                     return Err(403);
                 } else {
                     protocols.push(protocol);
@@ -927,7 +927,7 @@ mod tests {
         let pair = URL_SAFE_NO_PAD.encode("pair-token");
         let runtime = URL_SAFE_NO_PAD.encode("runtime-token");
         let request = format!(
-            "GET /acp HTTP/1.1\r\nHost: 192.168.1.10:49152\r\nOrigin: http://192.168.1.10:49152\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Protocol: qwen-ws, openwork-bearer.{pair}\r\n\r\n"
+            "GET /acp HTTP/1.1\r\nHost: 192.168.1.10:49152\r\nOrigin: http://192.168.1.10:49152\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Protocol: qwen-ws, qwen-bearer.{pair}\r\n\r\n"
         );
         let rewritten = rewrite_request(
             request.as_bytes(),
@@ -940,12 +940,12 @@ mod tests {
         )
         .expect("rewrite");
         let rewritten = String::from_utf8(rewritten).expect("utf8");
-        assert!(rewritten.contains(&format!("openwork-bearer.{runtime}")));
-        assert!(!rewritten.contains(&format!("openwork-bearer.{pair}")));
+        assert!(rewritten.contains(&format!("qwen-bearer.{runtime}")));
+        assert!(!rewritten.contains(&format!("qwen-bearer.{pair}")));
         assert!(rewritten.contains("Connection: Upgrade\r\n"));
 
         let request = format!(
-            "GET /acp HTTP/1.1\r\nHost: 192.168.1.10:49152\r\nOrigin: http://192.168.1.10:49152\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Protocol: leak-openwork-bearer.{pair}, openwork-bearer.{pair}\r\n\r\n"
+            "GET /acp HTTP/1.1\r\nHost: 192.168.1.10:49152\r\nOrigin: http://192.168.1.10:49152\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Protocol: leak-qwen-bearer.{pair}, qwen-bearer.{pair}\r\n\r\n"
         );
         assert_eq!(
             rewrite_request(
