@@ -208,4 +208,20 @@ function verifyRuntimeIntegrity() {
     ],
     { stdio: 'pipe', timeout: 180_000 },
   );
+  for (const packageName of [
+    '@lydell/node-pty',
+    '@qwen-code/audio-capture',
+    '@teddyzhu/clipboard',
+    'sharp',
+  ]) {
+    execFileSync(
+      nodePath,
+      [
+        '--input-type=module',
+        '--eval',
+        `await import(${JSON.stringify(packageName)})`,
+      ],
+      { cwd: path.join(runtimeRoot, 'lib'), stdio: 'pipe' },
+    );
+  }
 }
