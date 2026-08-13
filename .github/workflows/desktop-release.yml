@@ -13,6 +13,11 @@ on:
         description: 'Release title. Defaults to openwork-v<version>.'
         required: false
         type: 'string'
+      electron_bridge:
+        description: 'Publish Electron-compatible update manifests and payloads for macOS, Windows, and Linux.'
+        required: true
+        default: true
+        type: 'boolean'
       dry_run:
         description: 'Build installers without publishing a release.'
         required: true
@@ -50,6 +55,7 @@ jobs:
         name: 'Validate version and source'
         shell: 'bash'
         env:
+          ELECTRON_BRIDGE: '${{ inputs.electron_bridge }}'
           INPUT_VERSION: '${{ inputs.version }}'
           INPUT_RELEASE_NAME: '${{ inputs.release_name }}'
           IS_DRAFT: '${{ inputs.draft }}'
@@ -75,6 +81,14 @@ jobs:
             echo "::error::Published stable releases require an X.Y.Z version: $INPUT_VERSION"
             exit 1
           fi
+          if [[ "$ELECTRON_BRIDGE" == "true" ]]; then
+            core="${version%%[-+]*}"
+            IFS='.' read -r major minor _ <<< "$core"
+            if [[ "$major" -eq 0 && "$minor" -lt 2 ]]; then
+              echo "::error::The Electron bridge starts at OpenWork 0.2.0: $INPUT_VERSION"
+              exit 1
+            fi
+          fi
           if [[ "$INPUT_RELEASE_NAME" == *$'\n'* || "$INPUT_RELEASE_NAME" == *$'\r'* || ${#INPUT_RELEASE_NAME} -gt 200 ]]; then
             echo "::error::Release names must be a single line up to 200 characters."
             exit 1
@@ -97,6 +111,7 @@ jobs:
       version: '${{ needs.metadata.outputs.version }}'
       release_name: '${{ needs.metadata.outputs.release_name }}'
       tag: '${{ needs.metadata.outputs.tag }}'
+      electron_bridge: '${{ inputs.electron_bridge }}'
       publish: false
       draft: '${{ inputs.draft }}'
       prerelease: '${{ inputs.prerelease }}'
@@ -112,6 +127,7 @@ jobs:
       version: '${{ needs.metadata.outputs.version }}'
       release_name: '${{ needs.metadata.outputs.release_name }}'
       tag: '${{ needs.metadata.outputs.tag }}'
+      electron_bridge: '${{ inputs.electron_bridge }}'
       publish: true
       draft: '${{ inputs.draft }}'
       prerelease: '${{ inputs.prerelease }}'

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,6 +13,14 @@ const packageDir = path.resolve(
   '..',
 );
 const versionScript = path.join(packageDir, 'scripts', 'version.js');
+const electronBridgeScript = path.join(
+  packageDir,
+  '..',
+  '..',
+  '.github',
+  'scripts',
+  'create-electron-bridge-manifest.mjs',
+);
 const root = fs.mkdtempSync(
   path.join(os.tmpdir(), 'openwork-desktop-release-test-'),
 );
@@ -20,6 +29,7 @@ try {
   testDesktopConfiguration();
   testMacosPermissions();
   testReleaseWorkflow();
+  testElectronBridgeManifest(path.join(root, 'electron-bridge'));
   testChecksumRefresh(path.join(root, 'checksums'));
   testVersionSynchronization(path.join(root, 'version'));
   console.log('OpenWork desktop release contract checks passed.');
@@ -36,7 +46,7 @@ function testDesktopConfiguration() {
   );
   assert.equal(config.productName, 'OpenWork');
   assert.equal(config.identifier, 'com.alibaba.openwork');
-  assert.equal(config.version, '0.1.0');
+  assert.equal(config.version, '0.2.0');
   assert.equal(config.build.devUrl, 'http://127.0.0.1:1420');
   assert.equal(config.build.frontendDist, '../bootstrap');
   assert.equal(config.app?.withGlobalTauri, true);
@@ -75,6 +85,22 @@ function testDesktopConfiguration() {
     scope: ['$HOME/.qwen/pets/**'],
   });
   assert.equal(config.bundle?.createUpdaterArtifacts, false);
+  assert.equal(
+    config.bundle?.windows?.nsis?.installerHooks,
+    'windows/electron-migration.nsh',
+  );
+  const migrationHook = fs.readFileSync(
+    path.join(packageDir, 'src-tauri', 'windows', 'electron-migration.nsh'),
+    'utf8',
+  );
+  assert.match(
+    migrationHook,
+    /Software\\d6bd5575-5bf2-5dad-acfe-35e3bbeefd68/,
+  );
+  assert.match(
+    migrationHook,
+    /ExecWait '\"\$R0\\Uninstall OpenWork\.exe\" \/currentuser \/S --updated _\?=\$R0'/,
+  );
   assert.equal(
     config.bundle?.resources?.['../runtime/openwork'],
     'runtime/openwork',
@@ -132,6 +158,13 @@ function testReleaseWorkflow() {
     'Verify bundled runtime',
     'Smoke packaged application',
     'create-desktop-update-manifest.mjs',
+    'create-electron-bridge-manifest.mjs',
+    'macos:latest-mac.yml',
+    'windows:latest.yml',
+    'linux:latest-linux.yml',
+    'electron_bridge',
+    'default: true',
+    'args+=(--latest)',
     'SHA256SUMS.txt',
     'desktop-latest',
     'Sign bundled runtime binaries (macOS)',
@@ -159,6 +192,71 @@ function testReleaseWorkflow() {
   assert.match(publishJob, /secrets: '?inherit'?/);
   assert.doesNotMatch(workflow, /uses: [^\n]+@(v\d|stable)\b/);
   assert.doesNotMatch(workflow, /push --force|force-with-lease/);
+}
+
+function testElectronBridgeManifest(directory) {
+  const assets = path.join(directory, 'assets');
+  fs.mkdirSync(assets, { recursive: true });
+  const artifacts = [
+    'OpenWork_0.2.0_arm64.zip',
+    'OpenWork_0.2.0_x64.zip',
+    'OpenWork_0.2.0_arm64.dmg',
+    'OpenWork_0.2.0_x64.dmg',
+    'OpenWork_0.2.0_x64-setup.exe',
+    'OpenWork_0.2.0_amd64.AppImage',
+  ];
+  for (const artifact of artifacts) {
+    fs.writeFileSync(path.join(assets, artifact), `contents:${artifact}`);
+  }
+  for (const [platform, filename, selected] of [
+    ['macos', 'latest-mac.yml', artifacts.slice(0, 4)],
+    ['windows', 'latest.yml', artifacts.slice(4, 5)],
+    ['linux', 'latest-linux.yml', artifacts.slice(5, 6)],
+  ]) {
+    const output = path.join(directory, filename);
+    execFileSync(process.execPath, [
+      electronBridgeScript,
+      '--assets',
+      assets,
+      '--platform',
+      platform,
+      '--version',
+      '0.2.0',
+      '--output',
+      output,
+    ]);
+    const manifest = fs.readFileSync(output, 'utf8');
+    assert.match(manifest, /^version: 0\.2\.0$/m);
+    for (const artifact of selected) {
+      const contents = fs.readFileSync(path.join(assets, artifact));
+      const sha512 = crypto
+        .createHash('sha512')
+        .update(contents)
+        .digest('base64');
+      assert.ok(manifest.includes(`url: ${artifact}`));
+      assert.ok(manifest.includes(`sha512: ${sha512}`));
+      assert.ok(manifest.includes(`size: ${contents.length}`));
+    }
+  }
+
+  fs.rmSync(path.join(assets, artifacts[1]));
+  const failure = spawnSync(
+    process.execPath,
+    [
+      electronBridgeScript,
+      '--assets',
+      assets,
+      '--platform',
+      'macos',
+      '--version',
+      '0.2.0',
+      '--output',
+      path.join(directory, 'latest-mac.yml'),
+    ],
+    { encoding: 'utf8' },
+  );
+  assert.notEqual(failure.status, 0);
+  assert.match(failure.stderr, /Expected one Electron bridge artifact/);
 }
 
 function testChecksumRefresh(directory) {
