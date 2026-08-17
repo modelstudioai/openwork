@@ -99,6 +99,16 @@ describe('effortCommand', () => {
     expect(setReasoningEffort).toHaveBeenCalledWith('xhigh');
   });
 
+  it('clears the override with default', async () => {
+    await effortCommand.action!(context, 'default');
+    expect(setReasoningEffort).toHaveBeenCalledWith(undefined);
+    expect(setValue).toHaveBeenCalledWith(
+      expect.anything(),
+      'model.reasoningEffort',
+      undefined,
+    );
+  });
+
   it('rejects an unknown tier without mutating config or settings', async () => {
     const res = await effortCommand.action!(context, 'turbo');
     expect(setReasoningEffort).not.toHaveBeenCalled();
@@ -110,6 +120,8 @@ describe('effortCommand', () => {
     // No completion so bare `/effort` opens the picker instead of auto-picking
     // the first tier; `/effort <tier>` still parses in the action above.
     expect(effortCommand.completion).toBeUndefined();
-    expect(effortCommand.argumentHint).toBe('[low|medium|high|xhigh|max]');
+    expect(effortCommand.argumentHint).toBe(
+      '[default|low|medium|high|xhigh|max]',
+    );
   });
 });

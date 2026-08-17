@@ -1,6 +1,6 @@
 # .github/workflows/ci.yml
 
-name: 'Qwen Code CI'
+name: 'OpenWork CI'
 
 on:
   # No `push` trigger: every job here is gated to pull_request / merge_group, so
@@ -50,7 +50,7 @@ env:
   # BOTH the github_ci_only helper step and the full-profile Test step, so a
   # new helper test can't be added to one path and silently dropped from the
   # other.
-  HELPER_TESTS: '.github/scripts/pr-safety-precheck.test.mjs .github/scripts/cap-release-notes.test.mjs .github/scripts/ci/classify-profile.test.mjs .github/scripts/ci/classify-pr-profile.test.mjs .github/scripts/upsert-bot-comment.test.mjs .github/scripts/ci/main-failure-signature.test.mjs .github/scripts/dsw-swe-verified/make-manifest.test.mjs .github/scripts/resolve-sandbox-image.test.mjs .github/scripts/web-shell-visuals-publish.test.mjs .github/scripts/web-shell-visuals-compose.test.mjs .github/scripts/serve-ab-diff.test.mjs .github/scripts/ci-runner-routing.test.mjs'
+  HELPER_TESTS: '.github/scripts/pr-safety-precheck.test.mjs .github/scripts/cap-release-notes.test.mjs .github/scripts/ci/classify-profile.test.mjs .github/scripts/ci/classify-pr-profile.test.mjs .github/scripts/upsert-bot-comment.test.mjs .github/scripts/dsw-swe-verified/make-manifest.test.mjs .github/scripts/resolve-sandbox-image.test.mjs .github/scripts/web-shell-visuals-publish.test.mjs .github/scripts/web-shell-visuals-compose.test.mjs .github/scripts/serve-ab-diff.test.mjs .github/scripts/ci-runner-routing.test.mjs .github/scripts/openwork-workflows.test.mjs'
 
 jobs:
   classify_pr:
@@ -807,18 +807,14 @@ jobs:
           node -e "const fs = require('node:fs'); for (const key of ['HOME', 'USERPROFILE']) { const dir = process.env[key]; if (dir) fs.mkdirSync(dir, { recursive: true }); }"
           npm run test:ci
 
-  # Windows counterpart of test_macos (see that job's note). ECS is the default
-  # with a windows-2022 kill-switch fallback; the check name stays unchanged so
-  # it matches the required-status-check context. The job is merge_group-only,
-  # so code reaching it is post-approval; maintainers can still queue fork PRs.
-  # The runs-on expression therefore needs only the kill switch. ECS-only
-  # tuning is gated on runner.environment; the hosted fallback is the pre-ECS
-  # job plus the checkout guard and a job-level timeout-minutes.
+  # Windows counterpart of test_macos (see that job's note). Qwen Code uses its
+  # ECS runner by default; OpenWork has no self-hosted Windows runner and stays
+  # on windows-2022. The check name remains stable for branch protection.
   test_windows:
     name: 'Test (windows-latest, Node 22.x)'
     needs: 'classify_pr'
     if: "${{ !cancelled() && github.event_name == 'merge_group' }}"
-    runs-on: '${{ vars.MAINTAINER_ECS_RUNNER_DISABLED != ''true'' && fromJSON(''["self-hosted", "Windows", "X64", "ecs-win"]'') || fromJSON(''["windows-2022"]'') }}'
+    runs-on: '${{ (github.repository == ''QwenLM/qwen-code'' && vars.MAINTAINER_ECS_RUNNER_DISABLED != ''true'') && fromJSON(''["self-hosted", "Windows", "X64", "ecs-win"]'') || fromJSON(''["windows-2022"]'') }}'
     timeout-minutes: 60
     permissions:
       contents: 'read'
@@ -828,9 +824,7 @@ jobs:
       # autocrlf on checks out LF-only files. Repository-local `./` actions
       # resolve from the job workspace, so the checkout must precede them;
       # the rest of the self-hosted tuning runs after the checkout via the
-      # configure-windows-runner action, shared verbatim with
-      # windows-runner-smoke.yml so the runner-validation smoke exercises
-      # exactly what this gate uses. LC_ALL mirrors the Linux gates' locale
+      # configure-windows-runner action. LC_ALL mirrors the Linux gates' locale
       # env (inert on Windows, where Node collates through ICU), and Git Bash
       # goes on PATH so the remaining steps can run under the workflow-level
       # bash default.
@@ -850,9 +844,9 @@ jobs:
         if: "${{ needs.classify_pr.outputs.skip_ci != 'true' && runner.environment == 'self-hosted' }}"
         uses: './.github/actions/configure-windows-runner'
 
-      # Same stale-checkout guard as the Ubuntu gate: this job now runs on ECS,
-      # so fail loud if the checkout lacks the merge-queue head rather than
-      # silently testing the wrong tree into a merge.
+      # Same stale-checkout guard as the Ubuntu gate: Qwen Code may run this on
+      # ECS, so fail loud if the checkout lacks the merge-queue head rather
+      # than silently testing the wrong tree into a merge.
       - name: 'Verify checkout includes expected head commit'
         if: "${{ needs.classify_pr.outputs.skip_ci != 'true' }}"
         uses: './.github/actions/verify-checkout-head'
@@ -960,25 +954,15 @@ jobs:
           os: '${{ matrix.os }}'
           github_token: '${{ secrets.GITHUB_TOKEN }}'
 
-  # Integration tests run only in the merge queue, not on every PR push.
-  # They are the suite that previously ran *only* in the nightly Release
-  # pipeline (`release.yml`), so regressions stayed hidden until release
-  # time. Gating them on `merge_group` catches the failure before the PR
-  # lands on `main`, while keeping the per-PR critical path fast. The
-  # `merge_group` event runs in the base-repo context, so the same model
-  # secrets used by the release jobs are available here.
-  #
-  # Until merge queue is enabled on `main` this job simply never triggers,
-  # so adding it is a no-op for existing PR/push runs. Reuses the exact
-  # `test:integration:cli:sandbox:none` script from `release.yml`.
+  # Qwen Code runs model-backed integration tests in its merge queue. OpenWork
+  # does not own those OPENAI_* credentials, so the repository gate keeps this
+  # imported job disabled here. The no-AK integration gate above remains active.
   integration_cli:
     name: 'Integration Tests (CLI, No Sandbox)'
     needs: 'classify_pr'
-    # Same ECS routing as the Ubuntu gate (via classify_pr): the merge queue runs
-    # in the base-repo context, so use the self-hosted ECS pool and keep the
-    # scarce hosted Linux runners free. Falls back to hosted if classify_pr is
-    # skipped or the ECS kill-switch is set.
-    if: "${{ !cancelled() && github.event_name == 'merge_group' }}"
+    # Same ECS routing as the Ubuntu gate for Qwen Code. This job is skipped in
+    # OpenWork by the repository gate above.
+    if: "${{ !cancelled() && github.repository == 'QwenLM/qwen-code' && github.event_name == 'merge_group' }}"
     runs-on: '${{ fromJSON(needs.classify_pr.outputs.ubuntu_runner || ''["ubuntu-latest"]'') }}'
     permissions:
       contents: 'read'

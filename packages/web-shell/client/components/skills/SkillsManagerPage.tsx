@@ -84,6 +84,27 @@ interface SkillsManagerPageProps {
   embedded?: EmbeddedManagerPage;
 }
 
+const CURATED_SKILLS = [
+  {
+    name: 'bailian-cli',
+    title: 'Bailian CLI',
+    descriptionKey: 'openwork.skills.bailian-cli',
+    url: 'https://github.com/modelstudioai/cli/blob/main/skills/bailian-cli/SKILL.md',
+  },
+  {
+    name: 'bailian-docs-llm-wiki',
+    title: 'Bailian Docs LLM Wiki',
+    descriptionKey: 'openwork.skills.bailian-docs-llm-wiki',
+    url: 'https://github.com/modelstudioai/skills/blob/main/skills/bailian-docs-llm-wiki/SKILL.md',
+  },
+  {
+    name: 'spark-video-episode',
+    title: 'Spark Video Episode',
+    descriptionKey: 'openwork.skills.spark-video-episode',
+    url: 'https://github.com/modelstudioai/skills/blob/main/skills/spark-video/SKILL.md',
+  },
+] as const;
+
 function skillLevelLabel(
   skill: DaemonWorkspaceSkillStatus,
   t: ReturnType<typeof useI18n>['t'],
@@ -190,6 +211,7 @@ export function SkillsManagerPage({
   const [installOpen, setInstallOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [listNotice, setListNotice] = useState<string | null>(null);
+  const [listNoticeError, setListNoticeError] = useState(false);
   const [notice, setNotice] = useState<{
     skillName: string;
     text: string;
@@ -279,9 +301,30 @@ export function SkillsManagerPage({
     request: Parameters<typeof install>[0],
   ): Promise<void> {
     setListNotice(null);
+    setListNoticeError(false);
     await install(request);
     setListNotice(t('skills.install.succeeded', { name: request.name.trim() }));
     await reload().catch(() => undefined);
+  }
+
+  async function installCuratedSkill(skill: (typeof CURATED_SKILLS)[number]) {
+    setBusySkill(skill.name);
+    try {
+      await installSkill({
+        name: skill.name,
+        scope: 'workspace',
+        source: { type: 'github', url: skill.url },
+      });
+    } catch (installError) {
+      setListNoticeError(true);
+      setListNotice(
+        installError instanceof Error
+          ? installError.message
+          : t('skills.install.failed'),
+      );
+    } finally {
+      setBusySkill(null);
+    }
   }
 
   async function deleteSkill(): Promise<void> {
@@ -292,6 +335,7 @@ export function SkillsManagerPage({
       await remove(selectedSkill.name, scope);
       setDeleteOpen(false);
       setSelectedName(null);
+      setListNoticeError(false);
       setListNotice(t('skills.delete.succeeded', { name: selectedSkill.name }));
       await reload().catch(() => undefined);
     } catch (deleteError) {
@@ -616,7 +660,7 @@ export function SkillsManagerPage({
 
         {listNotice ? (
           <ManagementNotice
-            tone="success"
+            tone={listNoticeError ? 'error' : 'success'}
             noticeKey={listNotice}
             closeLabel={t('common.close')}
             onDismiss={() => setListNotice(null)}
@@ -624,6 +668,56 @@ export function SkillsManagerPage({
             {listNotice}
           </ManagementNotice>
         ) : null}
+
+        <section
+          className="flex flex-col gap-3"
+          aria-labelledby="curated-skills-title"
+        >
+          <div>
+            <h2 id="curated-skills-title" className="text-base font-semibold">
+              {t('openwork.skills.marketplace')}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t('openwork.skills.marketplaceDescription')}
+            </p>
+          </div>
+          <div className={styles.skillGrid} data-column-count="3">
+            {CURATED_SKILLS.map((skill) => {
+              const installed = displayedSkills.some(
+                (item) => item.name === skill.name,
+              );
+              return (
+                <Card key={skill.name} size="sm">
+                  <CardHeader>
+                    <CardTitle>{skill.title}</CardTitle>
+                    <CardDescription>{t(skill.descriptionKey)}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={
+                        installed || !canManageSkills || busySkill !== null
+                      }
+                      onClick={() => void installCuratedSkill(skill)}
+                    >
+                      {busySkill === skill.name ? (
+                        <Spinner data-icon="inline-start" />
+                      ) : (
+                        <PlusIcon data-icon="inline-start" />
+                      )}
+                      {t(
+                        installed
+                          ? 'openwork.skills.installed'
+                          : 'openwork.skills.install',
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
 
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />

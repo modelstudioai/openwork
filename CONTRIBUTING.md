@@ -97,12 +97,15 @@ This section guides contributors on how to build, modify, and understand the dev
 
 ### Build Process
 
-To clone the repository:
+To clone OpenWork:
 
 ```bash
-git clone https://github.com/QwenLM/qwen-code.git # Or your fork's URL
-cd qwen-code
+git clone https://github.com/modelstudioai/openwork.git
+cd openwork
 ```
+
+Maintainers who synchronize Qwen Code should also configure the fetch-only
+`qwen-upstream` remote and follow the [upstream maintenance guide](./docs/developers/openwork-upstream-maintenance.md).
 
 To install dependencies defined in `package.json` as well as root dependencies:
 
@@ -137,6 +140,9 @@ To start the Qwen Code application from the source code (after building), run th
 ```bash
 npm start
 ```
+
+For the OpenWork desktop app, use the commands in
+[`packages/desktop-shell/README.md`](./packages/desktop-shell/README.md).
 
 If you'd like to run the source build outside of the qwen-code folder, you can utilize `npm link path/to/qwen-code/packages/cli` (see: [docs](https://docs.npmjs.com/cli/v9/commands/npm-link)) to run with `qwen-code`
 

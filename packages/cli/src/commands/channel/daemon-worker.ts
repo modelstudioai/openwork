@@ -176,6 +176,7 @@ export interface RunChannelDaemonWorkerOptions {
   loadDaemonSdk?: () => Promise<DaemonSdkLike>;
   sendReady?: (ready: ChannelDaemonWorkerReady) => void;
   reportStartup?: (message: ChannelStartupReportMessage) => Promise<void>;
+  onTerminalDisconnect?: (channelName: string, error: Error) => void;
   startupSignal?: AbortSignal;
   channelLoopMcpHost?: DaemonChannelLoopMcpHost;
 }
@@ -540,6 +541,8 @@ export async function runChannelDaemonWorker(
             ...(proxy ? { proxy } : {}),
             router: createdRouter,
             stateDir: daemonChannelStateDir(daemonWorkspace, name),
+            onTerminalDisconnect: (error) =>
+              opts.onTerminalDisconnect?.(name, error),
             channelMemory: {
               readChannelMemory,
               getChannelMemoryRevision,
@@ -580,6 +583,7 @@ export async function runChannelDaemonWorker(
       writeStdoutLine(`[Channel] Connecting "${safeName}"...`);
       try {
         await abortableStartup(channel.connect(), startupSignal);
+        throwIfStartupAborted(startupSignal);
         connected.push(name);
         writeStdoutLine(`[Channel] "${safeName}" connected.`);
       } catch (err) {
@@ -914,6 +918,11 @@ export const daemonWorkerCommand: CommandModule<unknown, DaemonWorkerArgs> = {
         'channel daemon worker',
       );
       const send = process.send!;
+      let terminalDisconnect: { channelName: string; error: Error } | undefined;
+      let notifyTerminalDisconnect!: () => void;
+      const terminalDisconnected = new Promise<void>((resolve) => {
+        notifyTerminalDisconnect = resolve;
+      });
       channelLoopMcpHost = new ChannelLoopMcpWorkerHost((message, callback) =>
         send.call(process, message, callback ?? (() => {})),
       );
@@ -943,6 +952,11 @@ export const daemonWorkerCommand: CommandModule<unknown, DaemonWorkerArgs> = {
         channelLoopMcpHost,
         sendReady: (ready) => {
           process.send?.({ type: 'ready', ...ready });
+        },
+        onTerminalDisconnect: (channelName, error) => {
+          terminalDisconnect = { channelName, error };
+          startupAbortController.abort();
+          notifyTerminalDisconnect();
         },
       });
       removeEarlyShutdownHandlers();
@@ -1171,6 +1185,7 @@ export const daemonWorkerCommand: CommandModule<unknown, DaemonWorkerArgs> = {
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
       process.once('disconnect', onDisconnect);
+      void terminalDisconnected.then(() => shutdown('SIGTERM'));
       if (pendingShutdownReason) {
         void shutdown(pendingShutdownReason);
       }
@@ -1180,6 +1195,12 @@ export const daemonWorkerCommand: CommandModule<unknown, DaemonWorkerArgs> = {
       process.removeListener('SIGINT', shutdown);
       process.removeListener('SIGTERM', shutdown);
       process.removeListener('disconnect', onDisconnect);
+      if (terminalDisconnect) {
+        writeStderrLine(
+          `[Channel] "${sanitizeLogText(terminalDisconnect.channelName, 128)}" disconnected permanently: ${sanitizeLogText(terminalDisconnect.error.message, 512)}`,
+        );
+        exitCode = 1;
+      }
       process.exit(exitCode);
     } catch (err) {
       removeEarlyShutdownHandlers();

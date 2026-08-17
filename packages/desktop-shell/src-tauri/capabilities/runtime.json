@@ -1,0 +1,28 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "runtime",
+  "description": "Allows the loopback Web Shell to use desktop integrations.",
+  "webviews": ["main"],
+  "local": false,
+  "remote": {
+    "urls": ["http://127.0.0.1:*"]
+  },
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-set-interface-zoom",
+    "allow-read-openwork-client-state",
+    "allow-write-openwork-client-state",
+    "allow-browser-open",
+    "allow-browser-set-bounds",
+    "allow-browser-navigate",
+    "allow-browser-close",
+    "allow-notify-turn-complete",
+    "allow-proxy-status",
+    "allow-list-pets",
+    "allow-toggle-pet",
+    "allow-check-for-updates",
+    "allow-install-update",
+    "allow-take-pending-deep-links"
+  ]
+}

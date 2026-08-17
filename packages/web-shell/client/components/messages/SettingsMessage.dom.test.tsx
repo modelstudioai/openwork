@@ -165,7 +165,7 @@ function renderPanel(
         onLanguageChange={noop}
         onThemeChange={noop}
         onSubDialog={overrides.onSubDialog ?? noop}
-        chatWidthMode="1000"
+        chatWidthMode="1100"
         onChatWidthModeChange={noop}
         modelManagement={overrides.modelManagement}
       />
@@ -406,5 +406,28 @@ describe('SettingsMessage user-scope editing', () => {
     const block = container.querySelector('[data-testid="model-management"]');
     expect(block).toBeTruthy();
     expect(block?.textContent).toContain('GPT-4o');
+  });
+
+  it('filters settings and OpenWork appearance controls', () => {
+    const setValue = vi.fn(() =>
+      Promise.resolve({} as DaemonSettingUpdateResult),
+    );
+    const container = renderPanel(makeState([boolSetting()], setValue));
+    const search = container.querySelector<HTMLInputElement>(
+      'input[type="search"]',
+    );
+    if (!search) throw new Error('Settings search not found');
+
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(search, 'high contrast');
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('High contrast');
+    expect(container.textContent).not.toContain('Test Flag');
   });
 });

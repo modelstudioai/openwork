@@ -17,7 +17,9 @@ interface FallbackCopy {
 // This surface renders OUTSIDE the in-app I18nProvider (the boundary wraps the
 // whole App, which owns that provider), so it cannot call useI18n. It carries
 // its own minimal copy instead of pulling the full translation table.
-const COPY: Record<WebShellLanguage, FallbackCopy> = {
+const COPY: Partial<Record<WebShellLanguage, FallbackCopy>> & {
+  en: FallbackCopy;
+} = {
   en: {
     title: 'Something went wrong',
     body: 'An unexpected error occurred and this content could not be displayed.',

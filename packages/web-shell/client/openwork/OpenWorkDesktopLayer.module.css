@@ -1,0 +1,179 @@
+.starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: min(720px, 100%);
+  margin: 12px auto 0;
+}
+
+.starters button,
+.composerTools button,
+.composerTools select,
+.browserToolbar button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.starters button {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.composerTools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composerTools button,
+.composerTools select {
+  min-height: 28px;
+  padding: 3px 7px;
+  font: inherit;
+}
+
+.characterCount {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.appearanceSettings {
+  display: grid;
+}
+
+.preferenceRow {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.preferenceRow select {
+  min-width: 150px;
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.browserToolbar {
+  position: fixed;
+  z-index: 80;
+  top: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 36px 36px 36px minmax(180px, 1fr) 36px;
+  align-items: center;
+  gap: 6px;
+  width: 55vw;
+  height: 48px;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: var(--background);
+}
+
+.browserToolbar form,
+.browserToolbar input {
+  width: 100%;
+}
+
+.browserToolbar input {
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--secondary);
+  color: var(--foreground);
+}
+
+.browserToolbar button {
+  height: 34px;
+}
+
+.paletteBackdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding-top: min(16vh, 140px);
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(4px);
+}
+
+.palette {
+  width: min(640px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--background);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+}
+
+.palette > input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.paletteList {
+  display: flex;
+  max-height: min(56vh, 440px);
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 8px;
+}
+
+.paletteList button {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.paletteList button:hover,
+.paletteList button:focus-visible {
+  background: var(--secondary);
+}
+
+.paletteMessage {
+  padding: 8px 16px 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .browserToolbar {
+    width: 100vw;
+  }
+
+  .preferenceRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}

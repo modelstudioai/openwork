@@ -121,6 +121,18 @@ describe('no-AK integration CI wiring', () => {
     expect(windowsJob).not.toContain(NO_AK_SCRIPT);
   });
 
+  it('does not run the model-backed integration job in OpenWork', () => {
+    const workflow = readFileSync(
+      path.join(ROOT, '.github/workflows/ci.yml'),
+      'utf8',
+    );
+    const integrationJob = getWorkflowJob(workflow, 'integration_cli');
+
+    expect(integrationJob).toContain(
+      `if: "\${{ !cancelled() && github.repository == 'QwenLM/qwen-code' && github.event_name == 'merge_group' }}"`,
+    );
+  });
+
   it('checks out the immutable PR head ref instead of the lagging merge ref', () => {
     const workflow = readFileSync(
       path.join(ROOT, '.github/workflows/ci.yml'),
@@ -219,22 +231,21 @@ describe('no-AK integration CI wiring', () => {
     expect(guardCalls.integration_cli).not.toContain('if:');
   });
 
-  it('pins the Windows gate kill-switch routing, tuning, and Node split', () => {
+  it('pins the Windows gate repository routing, tuning, and Node split', () => {
     const workflow = readFileSync(
       path.join(ROOT, '.github/workflows/ci.yml'),
       'utf8',
     );
     const windowsJob = getWorkflowJob(workflow, 'test_windows');
 
-    // The runs-on expression is the Windows gate's escape hatch. Pin the
-    // whole line so a variable typo, a quoting regression in the nested
-    // ''true'' escapes, or an && / || regrouping fails here instead of
-    // surfacing only when the switch is flipped.
+    // Qwen Code may use its ECS runner, while OpenWork must stay hosted.
+    // Pin the whole expression so an upstream merge cannot drop the repository
+    // boundary and leave OpenWork's merge queue waiting for a missing runner.
     const windowsRunsOn = windowsJob
       .split('\n')
       .find((line) => line.startsWith('    runs-on:'));
     expect(windowsRunsOn).toBe(
-      `    runs-on: '\${{ vars.MAINTAINER_ECS_RUNNER_DISABLED != ''true'' && fromJSON(''["self-hosted", "Windows", "X64", "ecs-win"]'') || fromJSON(''["windows-2022"]'') }}'`,
+      `    runs-on: '\${{ (github.repository == ''QwenLM/qwen-code'' && vars.MAINTAINER_ECS_RUNNER_DISABLED != ''true'') && fromJSON(''["self-hosted", "Windows", "X64", "ecs-win"]'') || fromJSON(''["windows-2022"]'') }}'`,
     );
     expect(windowsJob.split('\n')).toContain('    timeout-minutes: 60');
 
@@ -245,8 +256,8 @@ describe('no-AK integration CI wiring', () => {
       "expected_sha: '${{ github.event.merge_group.head_sha }}'",
     );
 
-    // The self-hosted-only tuning comes from the composite action shared with
-    // windows-runner-smoke.yml, and only runs on self-hosted machines.
+    // The self-hosted-only tuning remains available to Qwen Code and only runs
+    // on self-hosted machines.
     const configure = getWorkflowStep(
       windowsJob,
       'Configure self-hosted Windows test environment',
@@ -307,63 +318,8 @@ describe('no-AK integration CI wiring', () => {
     expect(configureAction).toContain(
       '$gitBash | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append',
     );
-    // The runner-validation smoke must consume the same action, or it
-    // validates a different configuration than the gate actually uses.
-    const smokeWorkflow = readFileSync(
-      path.join(ROOT, '.github/workflows/windows-runner-smoke.yml'),
-      'utf8',
-    );
-    expect(smokeWorkflow).toContain(
-      "uses: './.github/actions/configure-windows-runner'",
-    );
-    expect(smokeWorkflow).toContain('npm run test:ci');
-    expect(smokeWorkflow).not.toContain(
-      'npm run test:ci --workspaces --if-present --parallel',
-    );
-    // Same ordering as the gate: autocrlf off before the checkout, the `./`
-    // configure action after it.
-    const smokeCheckoutIndex = smokeWorkflow.indexOf("name: 'Checkout'");
-    const smokeAutocrlfIndex = smokeWorkflow.indexOf(
-      'git config --global core.autocrlf false',
-    );
-    expect(smokeCheckoutIndex).toBeGreaterThanOrEqual(0);
-    expect(smokeAutocrlfIndex).toBeGreaterThanOrEqual(0);
-    expect(smokeAutocrlfIndex).toBeLessThan(smokeCheckoutIndex);
-    expect(
-      smokeWorkflow.indexOf(
-        "uses: './.github/actions/configure-windows-runner'",
-      ),
-    ).toBeGreaterThan(smokeCheckoutIndex);
-    // The smoke runs behind the same caching egress proxy as the gate, so it
-    // takes the same stale-checkout guard, pinned to the dispatched head.
-    expect(
-      smokeWorkflow.indexOf("uses: './.github/actions/verify-checkout-head'"),
-    ).toBeGreaterThan(smokeCheckoutIndex);
-    expect(smokeWorkflow).toContain("expected_sha: '${{ github.sha }}'");
-    // The smoke is self-hosted-only, so it must take the same Node path as
-    // the gate's self-hosted side: the pre-installed Node, never a nodejs.org
-    // download the ECS egress proxy cannot reach.
-    expect(smokeWorkflow).toContain(
-      "uses: './.github/actions/self-hosted-node'",
-    );
-    expect(smokeWorkflow).not.toContain('actions/setup-node');
-    // The gate's run steps inherit ci.yml's workflow-level bash default, so
-    // the smoke must execute these commands under the same shell; a
-    // powershell pin there would validate a shell the gate never runs.
-    const smokeJob = getWorkflowJob(smokeWorkflow, 'validate');
-    for (const stepName of [
-      'Configure persistent npm cache (self-hosted)',
-      'Configure npm for rate limiting',
-      'Install dependencies',
-      'Run tests and generate reports',
-    ]) {
-      expect(getWorkflowStep(smokeJob, stepName)).toContain("shell: 'bash'");
-    }
-    // Both workflows declare the persistent npm cache step; the gate's
-    // self-hosted path exports NPM_CONFIG_CACHE for every later npm command.
-    expect(
-      getWorkflowStep(smokeJob, 'Configure persistent npm cache (self-hosted)'),
-    ).toContain('NPM_CONFIG_CACHE=');
+    // The gate's self-hosted path exports NPM_CONFIG_CACHE for every later npm
+    // command. OpenWork takes the hosted path and skips this step.
     const gateNpmCache = getWorkflowStep(
       windowsJob,
       'Configure persistent npm cache (self-hosted)',
@@ -421,10 +377,10 @@ describe('no-AK integration CI wiring', () => {
       'utf8',
     );
 
-    // The Windows gate and the smoke workflow are pinned above; these three
-    // call sites must be pinned too, or a revert to the inline pre-PR script
-    // keeps the suite green and only surfaces when a self-hosted machine
-    // lacks Node on PATH and runs without the preflight's fail-fast error.
+    // The Windows gate is pinned above; these three call sites must be pinned
+    // too, or a revert to the inline pre-PR script keeps the suite green and
+    // only surfaces when a self-hosted machine lacks Node on PATH and runs
+    // without the preflight's fail-fast error.
     const nodeCalls = {
       test: getWorkflowStep(
         getWorkflowJob(workflow, 'test'),

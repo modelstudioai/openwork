@@ -99,6 +99,8 @@ const composerCoreState = vi.hoisted(() => ({
   slashMenu: null as SlashMenuState | null,
   focus: vi.fn(),
   closeSlashMenu: vi.fn(),
+  submit: vi.fn(),
+  text: '',
   mobileComposer: null as unknown,
   openHistorySearch: vi.fn(),
   shellMode: false,
@@ -130,7 +132,7 @@ vi.mock('../hooks/useComposerCore', async (importOriginal) => {
       focus: composerCoreState.focus,
       submitText: vi.fn(),
       clearText: vi.fn(),
-      getText: vi.fn(() => ''),
+      getText: vi.fn(() => composerCoreState.text),
       hasInput: vi.fn(() => false),
       hasAttachments:
         mockComposerCoreState.pastedImages.length > 0 ||
@@ -161,7 +163,7 @@ vi.mock('../hooks/useComposerCore', async (importOriginal) => {
       removeInlineTags: vi.fn(),
       insertText: vi.fn(),
       setText: vi.fn(),
-      submit: vi.fn(),
+      submit: composerCoreState.submit,
       clear: vi.fn(),
       retryLast: vi.fn(),
       replaceEditorText: vi.fn(),
@@ -239,6 +241,8 @@ afterEach(() => {
   composerCoreState.shellMode = false;
   composerCoreState.focus.mockReset();
   composerCoreState.closeSlashMenu.mockReset();
+  composerCoreState.submit.mockReset();
+  composerCoreState.text = '';
   composerCoreState.mobileComposer = null;
   composerCoreState.openHistorySearch.mockReset();
   voiceButtonState.onActiveChange = undefined;
@@ -273,6 +277,7 @@ function renderChatEditor(props: {
   tokenCount?: number;
   contextWindow?: number;
   onShowContextUsage?: () => void;
+  onSubmit?: (text: string) => boolean | void;
   placeholderText?: string;
   animatePlaceholder?: boolean;
   disabled?: boolean;
@@ -1077,6 +1082,32 @@ describe('ChatEditor toolbar popovers', () => {
     } finally {
       globalThis.ResizeObserver = originalResizeObserver;
     }
+  });
+
+  it('runs toolbar commands without submitting the composer draft', () => {
+    const onSubmit = vi.fn();
+    composerCoreState.text = 'keep this draft';
+    const container = renderChatEditor({
+      onSubmit,
+      visibleToolbarActions: [],
+      customization: {
+        renderComposerToolbarEnd: ({ runCommand }) => (
+          <button type="button" onClick={() => runCommand('/effort high')}>
+            effort
+          </button>
+        ),
+      },
+    });
+
+    act(() => {
+      Array.from(container.querySelectorAll('button'))
+        .find((button) => button.textContent === 'effort')
+        ?.click();
+    });
+
+    expect(onSubmit).toHaveBeenCalledWith('/effort high');
+    expect(composerCoreState.text).toBe('keep this draft');
+    expect(composerCoreState.submit).not.toHaveBeenCalled();
   });
 
   it('opens a searchable model popover and selects the filtered model', () => {

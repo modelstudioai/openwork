@@ -184,6 +184,7 @@ function ensureBuiltins(): Promise<void> {
     builtinsPromise = (async () => {
       const labelled = [
         { name: 'telegram', promise: import('@qwen-code/channel-telegram') },
+        { name: 'whatsapp', promise: import('@qwen-code/channel-whatsapp') },
         { name: 'weixin', promise: import('@qwen-code/channel-weixin') },
         { name: 'dingtalk', promise: import('@qwen-code/channel-dingtalk') },
         { name: 'wecom', promise: import('@qwen-code/channel-wecom') },
