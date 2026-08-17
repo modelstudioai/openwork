@@ -1000,6 +1000,7 @@ export function registerSessionRoutes(
     const cwd = parseOptionalWorkspaceCwd(body, boundWorkspace, res);
     if (cwd === undefined) return undefined;
     const hasExplicitWorkspace = 'cwd' in body;
+    const entries = workspaceRegistry.listEntries();
     let key: string | undefined;
     if (hasExplicitWorkspace) {
       try {
@@ -1014,6 +1015,7 @@ export function registerSessionRoutes(
     }
 
     let runtime: WorkspaceRuntime | undefined;
+    let telemetryWorkspacePublished = false;
     if (hasExplicitWorkspace) {
       const selectedEntry = workspaceRegistry.getEntryByWorkspaceCwd(key!);
       if (!selectedEntry) {
@@ -1028,6 +1030,19 @@ export function registerSessionRoutes(
         return undefined;
       }
       runtime = selectedEntry.current.runtime;
+      setDaemonTelemetryWorkspace(res, runtime.workspaceCwd);
+      telemetryWorkspacePublished = true;
+    } else if (entries.length === 1) {
+      const onlyEntry = entries[0]!;
+      runtime = onlyEntry.current?.runtime;
+      if (runtime) {
+        setDaemonTelemetryWorkspace(res, runtime.workspaceCwd);
+        telemetryWorkspacePublished = true;
+      }
+      if (onlyEntry.state !== 'active' || !runtime) {
+        sendWorkspaceRuntimeUnavailable(res, onlyEntry);
+        return undefined;
+      }
     }
 
     const liveOwner = workspaceRegistry.resolveLiveSessionOwner(sessionId);
@@ -1051,12 +1066,12 @@ export function registerSessionRoutes(
       }
     } else if (liveOwner.kind === 'found') {
       runtime = liveOwner.runtime;
-    } else {
+    } else if (!runtime) {
       const persistedOwners: Array<{
         entry: WorkspaceEntry;
         runtime: WorkspaceRuntime;
       }> = [];
-      for (const entry of workspaceRegistry.listEntries()) {
+      for (const entry of entries) {
         const candidate = entry.current?.runtime;
         if (!candidate) continue;
         const location =
@@ -1092,7 +1107,9 @@ export function registerSessionRoutes(
     }
 
     if (!runtime) throw new SessionNotFoundError(sessionId);
-    setDaemonTelemetryWorkspace(res, runtime.workspaceCwd);
+    if (!telemetryWorkspacePublished) {
+      setDaemonTelemetryWorkspace(res, runtime.workspaceCwd);
+    }
     if (!runtime.primary && !runtime.trusted) {
       logSessionRoutingFailure(route, 'untrusted_workspace', {
         workspaceId: runtime.workspaceId,

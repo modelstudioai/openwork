@@ -1083,7 +1083,7 @@ describe('multi-workspace session dispatch', () => {
 
   it('restores an unqualified dormant session through its persisted workspace owner', async () => {
     await withRuntimeDir(async () => {
-      const sessionId = 'dormant-secondary-session';
+      const sessionId = '00000000-0000-4000-8000-000000000002';
       await writeStoredSession({
         sessionId,
         cwd: SECONDARY_CWD,
