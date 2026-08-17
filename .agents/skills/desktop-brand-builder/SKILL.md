@@ -32,7 +32,6 @@ Optional overrides:
 - `website`
 - `appName`
 - `appId`
-- `artifactPrefix`
 - `target`: `mac`, `win`, `linux`, or `all`
 
 If required input is missing, ask once:
@@ -52,8 +51,6 @@ Infer missing values deterministically:
 
 - `appName`: title-case the hyphen-separated `brandId`; `acme-ai` becomes
   `Acme AI`
-- `artifactPrefix`: title-case the hyphen-separated `brandId` and join with
-  hyphens; `acme-ai` becomes `Acme-AI`
 - `appId`: if `website` has a valid host, reverse the host labels and append
   `.desktop`; `https://acme.ai` becomes `ai.acme.desktop`
 - fallback `appId`: `app.<brandId>.desktop`
@@ -91,37 +88,40 @@ Create a temporary `brand.json` in the build directory:
   "website": "https://acme.ai",
   "appName": "Acme AI",
   "appId": "ai.acme.desktop",
-  "artifactPrefix": "Acme-AI",
   "copyright": "Copyright © 2026 Acme AI"
 }
 ```
 
-Install desktop dependencies if `packages/desktop/node_modules` is missing:
+Install repository and Tauri shell dependencies when missing:
 
 ```bash
-cd packages/desktop
-bun install
+npm install
+cd packages/desktop-shell && npm install --workspaces=false
 ```
 
 Then run this skill's bundled brand creation script:
 
 ```bash
 cd /absolute/path/to/qwen-code
-bun run packages/desktop/.agents/skills/desktop-brand-builder/scripts/brand-create.ts \
-  --desktop-root /absolute/path/to/qwen-code/packages/desktop \
+npx tsx .agents/skills/desktop-brand-builder/scripts/brand-create.ts \
+  --desktop-root /absolute/path/to/qwen-code/packages/desktop-shell \
   --config /absolute/path/to/brand.json
 ```
 
-The agent should not hand-edit `branding.ts` or brand asset files when this
-bundled script is available. The bundled script is the source of truth for
-patching code and generating resources.
+The agent should not hand-edit Tauri icons, the renderer symbol, or
+`tauri.conf.json` when this script is available. It generates icons with the
+Tauri CLI and patches the visible bootstrap/Web Shell brand copy and deep-link
+scheme. It disables the OpenWork updater endpoint so a white-label build cannot
+install an OpenWork release; configure a brand-owned signed endpoint before
+enabling updates.
 
 Package with the current host target unless the user requested a target:
 
 ```bash
-CRAFT_BRAND=<brandId> bun run electron:dist:mac
-CRAFT_BRAND=<brandId> bun run electron:dist:win
-CRAFT_BRAND=<brandId> bun run electron:dist:linux
+cd packages/desktop-shell
+npm run build --workspaces=false -- --bundles dmg
+npm run build --workspaces=false -- --bundles nsis
+npm run build --workspaces=false -- --bundles appimage,deb
 ```
 
 For `target: all`, run only targets supported by the current machine or CI
@@ -133,7 +133,7 @@ files exist.
 After packaging:
 
 1. Confirm the expected artifact exists under
-   `packages/desktop/apps/electron/release/`.
+   `packages/desktop-shell/src-tauri/target/release/bundle/`.
 2. Compute `sha256sum` or `shasum -a 256` for each artifact.
 3. On macOS, run `hdiutil verify` for generated DMG files.
 4. Report the artifact path, SHA-256, app name, app id, and build directory.
@@ -143,8 +143,8 @@ After packaging:
 - Invalid `brandId`: show the regex and ask for a corrected value.
 - Missing `logo`: ask for a valid local path.
 - Missing bundled script: report that
-  `packages/desktop/.agents/skills/desktop-brand-builder/scripts/brand-create.ts`
-  is missing, and include the expected command.
+  `.agents/skills/desktop-brand-builder/scripts/brand-create.ts` is missing,
+  and include the expected command.
 - Build failure: preserve the build directory, return the last useful error
   lines, and include the full log path or command that produced the failure.
 

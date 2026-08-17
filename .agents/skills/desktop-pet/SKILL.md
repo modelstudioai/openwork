@@ -6,9 +6,10 @@ version: 1.0.0
 
 # Desktop Pet Creator
 
-Create pixel-art chibi desktop pet companions for OpenWork's floating pet window.
+Create pixel-art chibi desktop pet companions for OpenWork's Tauri pet window.
 Given any character name, generate a complete pet package with animated spritesheet
-and place it in `~/.qwen/pets/` where OpenWork auto-discovers it.
+and place it in `~/.qwen/pets/` where OpenWork auto-discovers it through the
+scoped Tauri asset protocol.
 
 ## Workflow
 
@@ -108,8 +109,8 @@ Rules:
    ```
 
 3. Tell the user to activate:
-   > Open **OpenWork → Settings → Appearance → Pet Companion**,
-   > click **Refresh**, then select **<Display Name>**.
+   > Reopen **OpenWork → Settings → Appearance → Desktop pet**, then select
+   > **<Display Name>**. Selection opens a live preview.
 
 ## Character Design Guidelines
 
@@ -229,7 +230,8 @@ Set via `features.extras` (list):
 
 ## Troubleshooting
 
-- **Pet not showing**: Click Refresh in Settings → Appearance → Pet Companion
+- **Pet not showing**: Reopen Settings → Appearance so OpenWork rescans
+  `~/.qwen/pets/`; confirm `pet.json` points to a file inside the same pet folder
 - **Colors look wrong**: Check that RGB values are tuples, not hex strings
 - **Spritesheet too large**: Must be under 5MB (webp lossless usually ~8-50KB)
 - **Animation jittery**: Ensure all 8 frames per row are visually distinct but not jarring

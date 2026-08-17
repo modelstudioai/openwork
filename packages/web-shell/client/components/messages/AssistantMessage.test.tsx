@@ -30,6 +30,7 @@ afterEach(() => {
   }
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function render(node: ReactNode, language: 'en' | 'zh-CN' = 'en'): HTMLElement {
@@ -461,5 +462,30 @@ describe('AssistantMessage markdown tables', () => {
 
     expect(container.querySelector('table')).not.toBeNull();
     expect(container.textContent).not.toContain('Copy table');
+  });
+});
+
+describe('AssistantMessage copy feedback', () => {
+  it('copies raw Markdown and announces success or failure', async () => {
+    const writeText = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('denied'));
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    vi.useFakeTimers();
+    const container = render(
+      <AssistantMessage content="**raw**" showFooterActions />,
+    );
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Copy"]',
+    );
+
+    await act(async () => button?.click());
+    expect(writeText).toHaveBeenCalledWith('**raw**');
+    expect(container.textContent).toContain('Copied');
+
+    await act(async () => button?.click());
+    expect(container.textContent).toContain('Copy failed');
+    expect(button?.title).toBe('Copy failed');
   });
 });

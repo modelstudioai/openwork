@@ -12,6 +12,8 @@ export const PLATFORM_MARKS: Record<string, string> = {
   feishu: 'F',
   github: 'GH',
   gitlab: 'GL',
+  telegram: 'TG',
+  whatsapp: 'WA',
 };
 
 const SUPPORTED_CHANNEL_TYPES = new Set([
@@ -20,11 +22,20 @@ const SUPPORTED_CHANNEL_TYPES = new Set([
   'feishu',
   'github',
   'gitlab',
+  'telegram',
+  'whatsapp',
 ]);
 
 export function isSupportedChannelType(
   type: unknown,
-): type is 'dingtalk' | 'wecom' | 'feishu' | 'github' | 'gitlab' {
+): type is
+  | 'dingtalk'
+  | 'wecom'
+  | 'feishu'
+  | 'github'
+  | 'gitlab'
+  | 'telegram'
+  | 'whatsapp' {
   return typeof type === 'string' && SUPPORTED_CHANNEL_TYPES.has(type);
 }
 

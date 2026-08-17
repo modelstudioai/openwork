@@ -17,6 +17,7 @@ const CLI_BUILD_PACKAGE_PATHS = [
   'packages/web-templates',
   'packages/channels/base',
   'packages/channels/telegram',
+  'packages/channels/whatsapp',
   'packages/channels/weixin',
   'packages/channels/dingtalk',
   'packages/channels/wecom',

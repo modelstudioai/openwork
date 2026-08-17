@@ -88,6 +88,8 @@ const GENERAL_SHORTCUTS: Array<[string, string]> = [
   ['Shift+Tab', 'help.shortcut.approvals'],
   ['Alt+Left/Right', 'help.shortcut.altWords'],
   ['Up/Down', 'help.shortcut.history'],
+  ['Cmd/Ctrl+K', 'help.shortcut.commandPalette'],
+  ['Cmd/Ctrl+Shift+E', 'help.shortcut.expandComposer'],
 ];
 
 function commandSignature(command: CommandInfo): string {
@@ -131,12 +133,19 @@ function filterCommands(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function GeneralHelp() {
+function GeneralHelp({ query }: { query: string }) {
   const { t } = useI18n();
+  const normalized = query.trim().toLowerCase();
+  const shortcuts = GENERAL_SHORTCUTS.filter(
+    ([key, description]) =>
+      !normalized ||
+      key.toLowerCase().includes(normalized) ||
+      t(description).toLowerCase().includes(normalized),
+  );
   return (
     <div className={styles.general}>
       <div className={styles.shortcuts}>
-        {GENERAL_SHORTCUTS.map(([key, description]) => (
+        {shortcuts.map(([key, description]) => (
           <div className={styles.shortcut} key={key}>
             <span className={styles.shortcutDesc}>{t(description)}</span>
             <span className={styles.shortcutKey}>{key}</span>
@@ -235,7 +244,6 @@ export function HelpDialog({ commands }: HelpDialogProps) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<HelpTab>('general');
   const { filterValue: query, inputProps } = useFilterInput();
-  const showSearch = activeTab !== 'general';
 
   return (
     <div className={styles.dialog}>
@@ -254,17 +262,15 @@ export function HelpDialog({ commands }: HelpDialogProps) {
             </button>
           ))}
         </div>
-        {showSearch && (
-          <input
-            className={styles.search}
-            {...inputProps}
-            placeholder={t('help.search')}
-          />
-        )}
+        <input
+          className={styles.search}
+          {...inputProps}
+          placeholder={t('help.search')}
+        />
       </div>
 
       {activeTab === 'general' ? (
-        <GeneralHelp />
+        <GeneralHelp query={query} />
       ) : (
         <CommandsHelp commands={commands} tab={activeTab} query={query} />
       )}

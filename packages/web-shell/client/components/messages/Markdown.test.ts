@@ -231,6 +231,35 @@ describe('qwen-session:// links', () => {
     (c as HTMLDivElement & { __unmount: () => void }).__unmount();
     c.remove();
   });
+
+  it('lets the host route safe external links', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    const onOpenLink = vi.fn(() => true);
+    act(() => {
+      root.render(
+        createElement(
+          WebShellCustomizationProvider,
+          { value: { markdown: { onOpenLink } } },
+          createElement(Markdown, {
+            content: '[Qwen](https://qwen.ai/docs)',
+          }),
+        ),
+      );
+    });
+    const click = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+    });
+
+    act(() => container.querySelector('a')?.dispatchEvent(click));
+
+    expect(onOpenLink).toHaveBeenCalledWith('https://qwen.ai/docs');
+    expect(click.defaultPrevented).toBe(true);
+    act(() => root.unmount());
+    container.remove();
+  });
 });
 
 describe('Markdown enhanced tables', () => {

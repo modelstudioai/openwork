@@ -167,7 +167,7 @@ interface ChatEditorProps {
    * from other panes' chips even when it collapses to an icon on a narrow split.
    */
   workspaceColor?: DaemonSessionGroupPresetColor;
-  chatWidthMode?: '1000' | 'wide';
+  chatWidthMode?: '840' | '1100' | 'wide';
   showChatWidthToggle?: boolean;
   chatWidthToggleMin?: number;
   visibleToolbarActions?: readonly ComposerToolbarAction[];
@@ -195,7 +195,7 @@ interface ChatEditorProps {
   onCreateScratchWorkspace?: () => void;
   onOpenExistingWorkspace?: () => void;
   atWorkspaceCwd?: string;
-  onChatWidthModeChange?: (mode: '1000' | 'wide') => void;
+  onChatWidthModeChange?: (mode: '840' | '1100' | 'wide') => void;
   onFocusFooter?: () => boolean;
   dialogOpen?: boolean;
   followupState?: UseDaemonFollowupSuggestionReturn['followupState'];
@@ -482,7 +482,7 @@ function TypewriterPlaceholder({ text }: { text: string }) {
   );
 }
 
-function WidthModeIcon({ mode }: { mode: '1000' | 'wide' }) {
+function WidthModeIcon({ mode }: { mode: '840' | '1100' | 'wide' }) {
   if (mode === 'wide') {
     return (
       <svg viewBox="0 0 1024 1024" aria-hidden="true">
@@ -1223,7 +1223,7 @@ export const ChatEditor = memo(
       workspaceName,
       workspaceTitle,
       workspaceColor,
-      chatWidthMode = '1000',
+      chatWidthMode = '1100',
       showChatWidthToggle = true,
       chatWidthToggleMin,
       visibleToolbarActions,
@@ -2200,6 +2200,9 @@ export const ChatEditor = memo(
                     <ToolbarStart
                       disabled={disabled}
                       isRunning={isRunning}
+                      text={core.getText()}
+                      submit={core.submit}
+                      runCommand={(command) => void onSubmit(command)}
                       currentMode={currentMode}
                       currentModel={currentModel}
                       sessionName={sessionName}
@@ -2384,6 +2387,9 @@ export const ChatEditor = memo(
                       <ToolbarEnd
                         disabled={disabled}
                         isRunning={isRunning}
+                        text={core.getText()}
+                        submit={core.submit}
+                        runCommand={(command) => void onSubmit(command)}
                         currentMode={currentMode}
                         currentModel={currentModel}
                         sessionName={sessionName}
@@ -2424,6 +2430,9 @@ export const ChatEditor = memo(
                     <ToolbarRight
                       disabled={disabled}
                       isRunning={isRunning}
+                      text={core.getText()}
+                      submit={core.submit}
+                      runCommand={(command) => void onSubmit(command)}
                       currentMode={currentMode}
                       currentModel={currentModel}
                       sessionName={sessionName}
@@ -2439,24 +2448,34 @@ export const ChatEditor = memo(
                       onClick={(e) => {
                         e.stopPropagation();
                         onChatWidthModeChange?.(
-                          chatWidthMode === 'wide' ? '1000' : 'wide',
+                          chatWidthMode === '840'
+                            ? '1100'
+                            : chatWidthMode === '1100'
+                              ? 'wide'
+                              : '840',
                         );
                       }}
                       disabled={!onChatWidthModeChange}
                       aria-label={
-                        chatWidthMode === 'wide'
-                          ? t('settings.option.ui.chatWidth.1000')
-                          : t('settings.option.ui.chatWidth.wide')
+                        chatWidthMode === '840'
+                          ? t('settings.option.ui.chatWidth.1100')
+                          : chatWidthMode === '1100'
+                            ? t('settings.option.ui.chatWidth.wide')
+                            : t('settings.option.ui.chatWidth.840')
                       }
                       title={
-                        chatWidthMode === 'wide'
-                          ? t('settings.option.ui.chatWidth.1000')
-                          : t('settings.option.ui.chatWidth.wide')
+                        chatWidthMode === '840'
+                          ? t('settings.option.ui.chatWidth.1100')
+                          : chatWidthMode === '1100'
+                            ? t('settings.option.ui.chatWidth.wide')
+                            : t('settings.option.ui.chatWidth.840')
                       }
                       data-tooltip={
-                        chatWidthMode === 'wide'
-                          ? t('settings.option.ui.chatWidth.1000')
-                          : t('settings.option.ui.chatWidth.wide')
+                        chatWidthMode === '840'
+                          ? t('settings.option.ui.chatWidth.1100')
+                          : chatWidthMode === '1100'
+                            ? t('settings.option.ui.chatWidth.wide')
+                            : t('settings.option.ui.chatWidth.840')
                       }
                     >
                       <span className={styles.toolBtnIcon}>

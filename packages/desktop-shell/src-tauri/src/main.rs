@@ -5,7 +5,9 @@ mod local_control;
 mod runtime;
 
 use command_group::GroupChild;
-use desktop_state::{default_window_size, restore_window, SettingsStore};
+use desktop_state::{
+    default_window_size, restore_window, valid_pet_id, OpenWorkClientState, SettingsStore,
+};
 use local_control::{LocalControlInfo, LocalControlSession};
 use runtime::{resolve_workspace, stop_runtime_handle, DesktopRuntime};
 use serde::{Deserialize, Serialize};
@@ -13,13 +15,17 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use tauri::menu::{Menu, MenuItem, MenuItemBuilder, SubmenuBuilder};
-use tauri::webview::{DownloadEvent, NewWindowResponse, WebviewWindowBuilder};
+use std::sync::{Arc, Mutex, OnceLock};
+use tauri::menu::{AboutMetadata, Menu, MenuItem, MenuItemBuilder, SubmenuBuilder};
+use tauri::webview::{DownloadEvent, NewWindowResponse, WebviewBuilder, WebviewWindowBuilder};
 use tauri::{
-    AppHandle, Emitter, Listener, Manager, RunEvent, State, WebviewUrl, WebviewWindow, WindowEvent,
+    AppHandle, Emitter, Listener, LogicalPosition, LogicalSize, Manager, RunEvent, State,
+    WebviewUrl, WebviewWindow, WindowEvent,
 };
+use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
 #[cfg(debug_assertions)]
@@ -37,6 +43,7 @@ static FULLSCREEN_HIDE_GENERATION: AtomicU64 = AtomicU64::new(0);
 // packages/desktop/packages/shared/src/config/storage.ts: ~/Documents/OpenWork,
 // relocatable through OPENWORK_DEFAULT_WORKSPACE_DIR (see default_workspace).
 const DEFAULT_WORKSPACE_DIRECTORY: &str = "OpenWork";
+static PENDING_DEEP_LINKS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +59,23 @@ struct BootstrapState {
 struct RuntimeStopped {
     runtime_id: u64,
     status: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PetManifest {
+    id: String,
+    display_name: String,
+    description: String,
+    spritesheet_path: PathBuf,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PetInfo {
+    id: String,
+    display_name: String,
+    description: String,
 }
 
 // A runtime that has spawned but may still be inside DesktopRuntime::start's
@@ -89,11 +113,21 @@ struct ApplicationState {
 
 fn main() {
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             focus_main_window(app);
+            emit_deep_links(app, args.iter().map(String::as_str));
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin({
+            let builder = tauri_plugin_updater::Builder::new();
+            match option_env!("OPENWORK_UPDATER_PUBLIC_KEY") {
+                Some(public_key) => builder.pubkey(public_key).build(),
+                None => builder.build(),
+            }
+        })
         .on_menu_event(|app, event| {
             if event.id() == "local-control" {
                 if let Err(error) = show_local_control_window(app) {
@@ -101,6 +135,22 @@ fn main() {
                 }
             } else if event.id() == "local-control-off" {
                 stop_local_control(app);
+            } else if event.id() == "repository" {
+                let _ = open::that_detached("https://github.com/modelstudioai/openwork");
+            } else if matches!(
+                event.id().as_ref(),
+                "new"
+                    | "settings"
+                    | "worktree"
+                    | "shortcuts"
+                    | "browser"
+                    | "pet"
+                    | "update"
+                    | "zoom-in"
+                    | "zoom-out"
+                    | "zoom-reset"
+            ) {
+                let _ = app.emit_to("main", "openwork-menu", event.id().as_ref());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -111,6 +161,21 @@ fn main() {
             disable_local_control,
             open_logs,
             restart_runtime,
+            set_interface_zoom,
+            read_openwork_client_state,
+            write_openwork_client_state,
+            browser_open,
+            browser_set_bounds,
+            browser_navigate,
+            browser_close,
+            notify_turn_complete,
+            proxy_status,
+            list_pets,
+            resolve_pet_sprite,
+            toggle_pet,
+            check_for_updates,
+            install_update,
+            take_pending_deep_links,
         ])
         .setup(setup_app);
 
@@ -198,19 +263,116 @@ fn main() {
 
 fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle().clone();
-    let menu = Menu::default(&handle)?;
+    let menu = Menu::new(&handle)?;
     let local_control_menu =
         MenuItemBuilder::with_id("local-control", "Local Control: Off…").build(&handle)?;
     let local_control_off_menu =
         MenuItemBuilder::with_id("local-control-off", "Turn Off Local Control")
             .enabled(false)
             .build(&handle)?;
+    let new_task = MenuItemBuilder::with_id("new", "New Task")
+        .accelerator("CmdOrCtrl+N")
+        .build(&handle)?;
+    let settings = MenuItemBuilder::with_id("settings", "Settings…")
+        .accelerator("CmdOrCtrl+,")
+        .build(&handle)?;
+    let worktree = MenuItemBuilder::with_id("worktree", "New Worktree Project…").build(&handle)?;
+    let shortcuts = MenuItemBuilder::with_id("shortcuts", "Keyboard Shortcuts").build(&handle)?;
+    let browser = MenuItemBuilder::with_id("browser", "Browser Dock").build(&handle)?;
+    let pet = MenuItemBuilder::with_id("pet", "Desktop Pet").build(&handle)?;
+    let update = MenuItemBuilder::with_id("update", "Check for Updates…").build(&handle)?;
+    let repository = MenuItemBuilder::with_id("repository", "OpenWork on GitHub").build(&handle)?;
+    let zoom_in = MenuItemBuilder::with_id("zoom-in", "Zoom In")
+        .accelerator("CmdOrCtrl+=")
+        .build(&handle)?;
+    let zoom_out = MenuItemBuilder::with_id("zoom-out", "Zoom Out")
+        .accelerator("CmdOrCtrl+-")
+        .build(&handle)?;
+    let zoom_reset = MenuItemBuilder::with_id("zoom-reset", "Actual Size")
+        .accelerator("CmdOrCtrl+0")
+        .build(&handle)?;
+    let about = AboutMetadata {
+        name: Some("OpenWork".to_string()),
+        version: Some(env!("CARGO_PKG_VERSION").to_string()),
+        authors: Some(vec![
+            "ModelStudio".to_string(),
+            "Qwen Code Team".to_string(),
+        ]),
+        comments: Some("OpenWork desktop, powered by the Qwen Code agent engine.".to_string()),
+        copyright: Some("Copyright © ModelStudio and Qwen Code contributors".to_string()),
+        license: Some("Apache-2.0".to_string()),
+        website: Some("https://github.com/modelstudioai/openwork".to_string()),
+        website_label: Some("OpenWork on GitHub".to_string()),
+        credits: Some("OpenWork by ModelStudio\nQwen Code agent engine by QwenLM".to_string()),
+        ..Default::default()
+    };
+    #[cfg(target_os = "macos")]
+    menu.append(
+        &SubmenuBuilder::new(&handle, "OpenWork")
+            .about(Some(about.clone()))
+            .separator()
+            .services()
+            .separator()
+            .hide()
+            .hide_others()
+            .show_all()
+            .separator()
+            .quit()
+            .build()?,
+    )?;
+    menu.append(
+        &SubmenuBuilder::new(&handle, "File")
+            .item(&new_task)
+            .item(&worktree)
+            .item(&settings)
+            .separator()
+            .close_window()
+            .quit()
+            .build()?,
+    )?;
+    menu.append(
+        &SubmenuBuilder::new(&handle, "Edit")
+            .undo()
+            .redo()
+            .separator()
+            .cut()
+            .copy()
+            .paste()
+            .select_all()
+            .build()?,
+    )?;
+    menu.append(
+        &SubmenuBuilder::new(&handle, "View")
+            .item(&browser)
+            .item(&pet)
+            .item(&shortcuts)
+            .separator()
+            .item(&zoom_in)
+            .item(&zoom_out)
+            .item(&zoom_reset)
+            .separator()
+            .fullscreen()
+            .build()?,
+    )?;
     menu.append(
         &SubmenuBuilder::new(&handle, "Control")
             .item(&local_control_menu)
             .item(&local_control_off_menu)
             .build()?,
     )?;
+    menu.append(
+        &SubmenuBuilder::new(&handle, "Window")
+            .minimize()
+            .maximize()
+            .close_window()
+            .build()?,
+    )?;
+    let help = SubmenuBuilder::new(&handle, "Help")
+        .item(&repository)
+        .item(&update);
+    #[cfg(not(target_os = "macos"))]
+    let help = help.separator().about(Some(about));
+    menu.append(&help.build()?)?;
     handle.set_menu(menu)?;
     let settings = SettingsStore::load(&handle).map_err(std::io::Error::other)?;
     let window_state = settings.window();
@@ -266,6 +428,15 @@ fn setup_app(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build()?;
     restore_window(&window, window_state.as_ref());
+    let deep_link_handle = handle.clone();
+    handle.deep_link().on_open_url(move |event| {
+        emit_deep_links(
+            &deep_link_handle,
+            event.urls().iter().map(|url| url.as_str()),
+        );
+    });
+    #[cfg(any(target_os = "linux", all(debug_assertions, target_os = "windows")))]
+    let _ = handle.deep_link().register_all();
 
     handle.manage(ApplicationState {
         runtime: Mutex::new(None),
@@ -422,6 +593,382 @@ fn open_logs(webview: WebviewWindow, state: State<'_, ApplicationState>) -> Resu
         .map_err(|error| format!("Failed to open desktop logs: {error}"))
 }
 
+#[tauri::command]
+fn set_interface_zoom(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+    percent: u16,
+) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    if !(50..=200).contains(&percent) {
+        return Err("Zoom must be between 50 and 200 percent.".to_string());
+    }
+    webview
+        .set_zoom(f64::from(percent) / 100.0)
+        .map_err(|error| format!("Failed to set zoom: {error}"))
+}
+
+#[tauri::command]
+fn read_openwork_client_state(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+) -> Result<OpenWorkClientState, String> {
+    require_runtime_origin(&webview, &state)?;
+    Ok(state.settings.openwork())
+}
+
+#[tauri::command]
+fn write_openwork_client_state(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+    client_state: OpenWorkClientState,
+) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    state.settings.set_openwork(client_state)
+}
+
+#[tauri::command]
+async fn browser_open(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+    url: String,
+) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    let url = parse_browser_url(&url)?;
+    if let Some(browser) = webview.app_handle().get_webview("browser") {
+        return browser
+            .navigate(url)
+            .map_err(|error| format!("Failed to navigate browser: {error}"));
+    }
+    let size = webview
+        .inner_size()
+        .map_err(|error| format!("Failed to read window size: {error}"))?;
+    let scale = webview
+        .scale_factor()
+        .map_err(|error| format!("Failed to read display scale: {error}"))?;
+    let logical = size.to_logical::<f64>(scale);
+    let x = logical.width * 0.45;
+    let mut builder = WebviewBuilder::new("browser", WebviewUrl::External(url))
+        .on_navigation(|url| is_safe_browser_url(url))
+        .on_new_window(|url, _| {
+            if is_safe_browser_url(&url) {
+                let _ = open::that_detached(url.as_str());
+            }
+            NewWindowResponse::Deny
+        });
+    if let Some(proxy) = resolve_proxy_url() {
+        builder = builder.proxy_url(proxy);
+    }
+    webview
+        .as_ref()
+        .window()
+        .add_child(
+            builder,
+            LogicalPosition::new(x, 48.0),
+            LogicalSize::new(logical.width - x, (logical.height - 48.0).max(1.0)),
+        )
+        .map(|_| ())
+        .map_err(|error| format!("Failed to open browser dock: {error}"))
+}
+
+#[tauri::command]
+fn browser_set_bounds(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    let size = webview
+        .inner_size()
+        .map_err(|error| format!("Failed to read window size: {error}"))?;
+    let scale = webview
+        .scale_factor()
+        .map_err(|error| format!("Failed to read display scale: {error}"))?;
+    let logical = size.to_logical::<f64>(scale);
+    if !browser_bounds_fit(x, y, width, height, logical.width, logical.height) {
+        return Err("Invalid browser dock bounds.".to_string());
+    }
+    let browser = webview
+        .app_handle()
+        .get_webview("browser")
+        .ok_or_else(|| "Browser dock is not open.".to_string())?;
+    browser
+        .set_position(LogicalPosition::new(x, y))
+        .and_then(|_| browser.set_size(LogicalSize::new(width, height)))
+        .map_err(|error| format!("Failed to resize browser dock: {error}"))
+}
+
+fn browser_bounds_fit(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    max_width: f64,
+    max_height: f64,
+) -> bool {
+    [x, y, width, height, max_width, max_height]
+        .iter()
+        .all(|value| value.is_finite())
+        && x >= 0.0
+        && y >= 0.0
+        && width >= 1.0
+        && height >= 1.0
+        && x + width <= max_width + 2.0
+        && y + height <= max_height + 2.0
+}
+
+#[tauri::command]
+fn browser_navigate(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+    action: String,
+) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    let script = match action.as_str() {
+        "back" => "history.back()",
+        "forward" => "history.forward()",
+        "reload" => "location.reload()",
+        _ => return Err("Unknown browser action.".to_string()),
+    };
+    webview
+        .app_handle()
+        .get_webview("browser")
+        .ok_or_else(|| "Browser dock is not open.".to_string())?
+        .eval(script)
+        .map_err(|error| format!("Failed to control browser dock: {error}"))
+}
+
+#[tauri::command]
+fn browser_close(webview: WebviewWindow, state: State<'_, ApplicationState>) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    close_browser_dock(webview.app_handle())
+}
+
+fn close_browser_dock(app: &AppHandle) -> Result<(), String> {
+    match app.get_webview("browser") {
+        Some(browser) => browser
+            .close()
+            .map_err(|error| format!("Failed to close browser dock: {error}")),
+        None => Ok(()),
+    }
+}
+
+#[tauri::command]
+fn notify_turn_complete(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+    title: String,
+    body: String,
+) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    webview
+        .app_handle()
+        .notification()
+        .builder()
+        .title(title.chars().take(80).collect::<String>())
+        .body(body.chars().take(240).collect::<String>())
+        .show()
+        .map_err(|error| format!("Failed to show notification: {error}"))
+}
+
+#[tauri::command]
+fn proxy_status(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+) -> Result<String, String> {
+    require_runtime_origin(&webview, &state)?;
+    Ok(resolve_proxy_url()
+        .map(|url| {
+            format!(
+                "Proxy: {}://{}",
+                url.scheme(),
+                url.host_str().unwrap_or("configured")
+            )
+        })
+        .unwrap_or_else(|| "Direct connection".to_string()))
+}
+
+fn pets_root(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .home_dir()
+        .map(|home| home.join(".qwen").join("pets"))
+        .map_err(|error| format!("Failed to resolve desktop pets: {error}"))
+}
+
+fn load_pet(app: &AppHandle, id: &str) -> Result<(PetManifest, PathBuf), String> {
+    load_pet_from_root(&pets_root(app)?, id)
+}
+
+fn load_pet_from_root(root: &Path, id: &str) -> Result<(PetManifest, PathBuf), String> {
+    if !valid_pet_id(id) || id == "qwen" {
+        return Err("Invalid custom desktop pet.".to_string());
+    }
+    let directory = root.join(id);
+    let manifest: PetManifest = serde_json::from_str(
+        &fs::read_to_string(directory.join("pet.json"))
+            .map_err(|error| format!("Failed to read desktop pet {id}: {error}"))?,
+    )
+    .map_err(|error| format!("Invalid desktop pet {id}: {error}"))?;
+    if manifest.id != id
+        || !valid_pet_text(&manifest.display_name, 80)
+        || !valid_pet_text(&manifest.description, 240)
+    {
+        return Err("Desktop pet manifest does not match its directory.".to_string());
+    }
+    let directory = fs::canonicalize(directory)
+        .map_err(|error| format!("Failed to resolve desktop pet {id}: {error}"))?;
+    let sprite = fs::canonicalize(directory.join(&manifest.spritesheet_path))
+        .map_err(|error| format!("Failed to resolve desktop pet spritesheet: {error}"))?;
+    if !sprite.starts_with(&directory) || !sprite.is_file() {
+        return Err("Desktop pet spritesheet escapes its pet directory.".to_string());
+    }
+    Ok((manifest, sprite))
+}
+
+fn valid_pet_text(value: &str, max: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= max && !value.chars().any(char::is_control)
+}
+
+#[tauri::command]
+fn list_pets(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+) -> Result<Vec<PetInfo>, String> {
+    require_runtime_origin(&webview, &state)?;
+    let app = webview.app_handle();
+    let mut pets = fs::read_dir(pets_root(app)?)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let id = entry.file_name().to_string_lossy().into_owned();
+            let (manifest, _) = load_pet(app, &id).ok()?;
+            Some(PetInfo {
+                id,
+                display_name: manifest.display_name,
+                description: manifest.description,
+            })
+        })
+        .collect::<Vec<_>>();
+    pets.sort_by(|left, right| left.display_name.cmp(&right.display_name));
+    Ok(pets)
+}
+
+#[tauri::command]
+fn resolve_pet_sprite(webview: WebviewWindow, pet_id: String) -> Result<Option<String>, String> {
+    if webview.label() != "pet" {
+        return Err("Desktop pet assets are available only to the pet window.".to_string());
+    }
+    if pet_id == "qwen" {
+        return Ok(None);
+    }
+    load_pet(webview.app_handle(), &pet_id)
+        .map(|(_, sprite)| Some(sprite.to_string_lossy().into_owned()))
+}
+
+fn open_pet(app: &AppHandle, pet_id: &str) -> Result<bool, String> {
+    if pet_id != "qwen" {
+        load_pet(app, pet_id)?;
+    }
+    let encoded = url::form_urlencoded::byte_serialize(pet_id.as_bytes()).collect::<String>();
+    WebviewWindowBuilder::new(
+        app,
+        "pet",
+        WebviewUrl::App(format!("pet.html?pet={encoded}").into()),
+    )
+    .title("OpenWork Pet")
+    .inner_size(144.0, 156.0)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .build()
+    .map(|_| true)
+    .map_err(|error| format!("Failed to open desktop pet: {error}"))
+}
+
+#[tauri::command]
+fn toggle_pet(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+    visible: Option<bool>,
+    pet_id: Option<String>,
+) -> Result<bool, String> {
+    require_runtime_origin(&webview, &state)?;
+    let app = webview.app_handle();
+    if let Some(pet) = app.get_webview_window("pet") {
+        if visible == Some(true) && pet_id.is_none() {
+            return Ok(true);
+        }
+        pet.close()
+            .map_err(|error| format!("Failed to close desktop pet: {error}"))?;
+        if visible != Some(true) {
+            return Ok(false);
+        }
+    }
+    if visible == Some(false) {
+        return Ok(false);
+    }
+    let selected = pet_id.unwrap_or_else(|| state.settings.openwork().pet_id);
+    open_pet(app, &selected)
+}
+
+#[tauri::command]
+async fn check_for_updates(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+) -> Result<Option<String>, String> {
+    require_runtime_origin(&webview, &state)?;
+    let updater = webview
+        .app_handle()
+        .updater()
+        .map_err(|error| format!("Updater unavailable: {error}"))?;
+    match updater
+        .check()
+        .await
+        .map_err(|error| format!("Update check failed: {error}"))?
+    {
+        Some(update) => Ok(Some(update.version)),
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+async fn install_update(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+) -> Result<(), String> {
+    require_runtime_origin(&webview, &state)?;
+    let app = webview.app_handle().clone();
+    let update = app
+        .updater()
+        .map_err(|error| format!("Updater unavailable: {error}"))?
+        .check()
+        .await
+        .map_err(|error| format!("Update check failed: {error}"))?
+        .ok_or_else(|| "OpenWork is already up to date".to_string())?;
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|error| format!("Update installation failed: {error}"))?;
+    app.restart()
+}
+
+#[tauri::command]
+fn take_pending_deep_links(
+    webview: WebviewWindow,
+    state: State<'_, ApplicationState>,
+) -> Result<Vec<String>, String> {
+    require_runtime_origin(&webview, &state)?;
+    Ok(std::mem::take(&mut *lock(
+        PENDING_DEEP_LINKS.get_or_init(|| Mutex::new(Vec::new())),
+    )))
+}
+
 fn start_runtime_async(app: AppHandle, workspace: PathBuf, create_if_missing: bool) {
     stop_runtime(&app);
     let generation = {
@@ -554,6 +1101,7 @@ fn emit_runtime_failure(app: &AppHandle, generation: u64, error: String) {
 }
 
 fn stop_runtime(app: &AppHandle) {
+    let _ = close_browser_dock(app);
     stop_local_control(app);
     let state = app.state::<ApplicationState>();
     state.start_generation.fetch_add(1, Ordering::SeqCst);
@@ -741,6 +1289,99 @@ fn require_bootstrap_origin(webview: &WebviewWindow) -> Result<(), String> {
     }
 }
 
+fn require_runtime_origin(webview: &WebviewWindow, state: &ApplicationState) -> Result<(), String> {
+    let url = webview
+        .url()
+        .map_err(|error| format!("Failed to read calling webview URL: {error}"))?;
+    if lock(&state.origin)
+        .as_ref()
+        .is_some_and(|origin| is_same_origin(&url, origin))
+    {
+        Ok(())
+    } else {
+        Err("This command is only available to the active local runtime.".to_string())
+    }
+}
+
+fn emit_deep_links<'a>(app: &AppHandle, values: impl Iterator<Item = &'a str>) {
+    for value in values {
+        let Ok(url) = Url::parse(value) else {
+            continue;
+        };
+        if !is_safe_deep_link(&url) {
+            continue;
+        }
+        let value = url.to_string();
+        let mut pending = lock(PENDING_DEEP_LINKS.get_or_init(|| Mutex::new(Vec::new())));
+        if pending.len() == 16 {
+            pending.remove(0);
+        }
+        pending.push(value.clone());
+        drop(pending);
+        let _ = app.emit_to("main", "openwork-deep-link", value);
+    }
+}
+
+fn is_safe_deep_link(url: &Url) -> bool {
+    if url.scheme() != "openwork"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return false;
+    }
+    match url.host_str() {
+        Some("new") => matches!(url.path(), "" | "/"),
+        Some("session") => url.path().strip_prefix('/').is_some_and(is_safe_session_id),
+        _ => false,
+    }
+}
+
+fn is_safe_session_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn parse_browser_url(value: &str) -> Result<Url, String> {
+    let url = Url::parse(value).map_err(|_| "Browser URL is invalid.".to_string())?;
+    if !is_safe_browser_url(&url) {
+        return Err("Browser URLs must use HTTP(S) without embedded credentials.".to_string());
+    }
+    Ok(url)
+}
+
+fn is_safe_browser_url(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https")
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+}
+
+fn resolve_proxy_url() -> Option<Url> {
+    [
+        "OPENWORK_PROXY",
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+    ]
+    .into_iter()
+    .filter_map(|key| std::env::var(key).ok())
+    .find_map(|value| {
+        Url::parse(value.trim()).ok().filter(|url| {
+            matches!(url.scheme(), "http" | "https" | "socks5" | "socks5h")
+                && url.host_str().is_some()
+        })
+    })
+}
+
 fn is_allowed_navigation(url: &Url, origin: &Mutex<Option<Url>>) -> bool {
     is_bootstrap_url(url)
         || lock(origin)
@@ -792,15 +1433,16 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 
 #[cfg(test)]
 mod tests {
+    use super::{
+        browser_bounds_fit, default_workspace_override_dir, default_workspace_path,
+        ensure_workspace_dir, is_allowed_navigation, is_bootstrap_url, is_safe_deep_link,
+        is_safe_external_url, is_same_origin, load_pet_from_root, origin_of, parse_browser_url,
+        BOOTSTRAP_URL,
+    };
     #[cfg(target_os = "macos")]
     use super::{
         cancel_pending_fullscreen_hide, should_restore_main_window, take_pending_fullscreen_hide,
         FULLSCREEN_HIDE_GENERATION, FULLSCREEN_HIDE_PENDING,
-    };
-    use super::{
-        default_workspace_override_dir, default_workspace_path, ensure_workspace_dir,
-        is_allowed_navigation, is_bootstrap_url, is_safe_external_url, is_same_origin, origin_of,
-        BOOTSTRAP_URL,
     };
     use std::ffi::OsString;
     use std::fs;
@@ -994,6 +1636,63 @@ mod tests {
         assert!(!is_safe_external_url(
             &Url::parse("javascript:alert(1)").expect("javascript")
         ));
+    }
+
+    #[test]
+    fn validates_desktop_external_inputs() {
+        assert!(is_safe_deep_link(
+            &Url::parse("openwork://session/123e4567-e89b-12d3-a456-426614174000")
+                .expect("session link")
+        ));
+        assert!(is_safe_deep_link(
+            &Url::parse("openwork://new").expect("new link")
+        ));
+        for value in [
+            "openwork://session/one/two",
+            "openwork://session/id?token=secret",
+            "openwork://unknown/id",
+            "https://session/id",
+        ] {
+            assert!(!is_safe_deep_link(
+                &Url::parse(value).expect("invalid link")
+            ));
+        }
+        assert!(parse_browser_url("https://example.com/path").is_ok());
+        assert!(parse_browser_url("https://user:secret@example.com").is_err());
+        assert!(parse_browser_url("file:///etc/passwd").is_err());
+        assert!(browser_bounds_fit(450.0, 48.0, 550.0, 752.0, 1000.0, 800.0));
+        assert!(!browser_bounds_fit(-1.0, 48.0, 550.0, 752.0, 1000.0, 800.0));
+        assert!(!browser_bounds_fit(
+            450.0, 48.0, 700.0, 752.0, 1000.0, 800.0
+        ));
+    }
+
+    #[test]
+    fn desktop_pet_sprites_stay_inside_their_manifest_directory() {
+        let root =
+            std::env::temp_dir().join(format!("openwork-desktop-pet-test-{}", std::process::id()));
+        let pet = root.join("helper");
+        fs::create_dir_all(&pet).expect("create pet directory");
+        fs::write(pet.join("spritesheet.webp"), b"image").expect("write sprite");
+        fs::write(
+            pet.join("pet.json"),
+            r#"{"id":"helper","displayName":"Helper","description":"A test pet","spritesheetPath":"spritesheet.webp"}"#,
+        )
+        .expect("write pet manifest");
+        let (_, sprite) = load_pet_from_root(&root, "helper").expect("valid pet");
+        assert_eq!(
+            sprite,
+            fs::canonicalize(pet.join("spritesheet.webp")).unwrap()
+        );
+
+        fs::write(root.join("outside.webp"), b"outside").expect("write outside sprite");
+        fs::write(
+            pet.join("pet.json"),
+            r#"{"id":"helper","displayName":"Helper","description":"A test pet","spritesheetPath":"../outside.webp"}"#,
+        )
+        .expect("write traversal manifest");
+        assert!(load_pet_from_root(&root, "helper").is_err());
+        fs::remove_dir_all(root).expect("cleanup pet fixture");
     }
 
     #[test]

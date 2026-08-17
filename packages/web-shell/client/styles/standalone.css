@@ -40,6 +40,47 @@ html.theme-dark body {
   color-scheme: dark;
 }
 
+html[data-openwork-high-contrast] [data-web-shell-root],
+html[data-openwork-high-contrast] [data-web-shell-portal-root] {
+  --border: color-mix(in srgb, currentColor 58%, transparent) !important;
+  --muted-foreground: color-mix(
+    in srgb,
+    currentColor 82%,
+    transparent
+  ) !important;
+}
+
+html[data-openwork-reduce-motion] *,
+html[data-openwork-reduce-motion] *::before,
+html[data-openwork-reduce-motion] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+[data-web-shell-composer][data-openwork-expanded] {
+  position: fixed !important;
+  z-index: 90;
+  inset: 48px 32px 32px !important;
+  width: auto !important;
+  max-width: none !important;
+  margin: 0 !important;
+  border-radius: 16px;
+  background: var(--background);
+  box-shadow: 0 20px 80px rgb(0 0 0 / 55%);
+}
+
+[data-web-shell-composer][data-openwork-expanded]
+  [data-web-shell-composer-surface] {
+  height: 100%;
+}
+
+[data-web-shell-composer][data-openwork-expanded]
+  [data-web-shell-composer-editor] {
+  min-height: calc(100vh - 190px);
+}
+
 /*
  * Native-app feel (P0):
  *

@@ -32,7 +32,7 @@ flowchart LR
   C -->|authenticated loopback URL| D[Existing Web Shell]
   A -->|retry / choose workspace / logs| B
   B -->|exit event| A
-  E[GitHub latest.json + installers] -->|signed updater| B
+  E[GitHub desktop-latest/latest.json + installers] -->|signed updater| B
 ```
 
 ### 组件职责
@@ -128,7 +128,7 @@ Tauri updater 使用签名更新产物和固定公开 key。应用启动后后�
 - 检查失败：写日志，不阻塞启动。
 - 有更新：bootstrap/Web Shell 上方显示原生确认对话框；用户确认后下载并安装，然后重启。
 
-发布 CI 使用 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 生成 updater signatures。`latest.json` 指向同一 GitHub Release 的平台更新包。只有非 draft、非 prerelease 发布会更新固定的 `desktop-latest` feed release。
+发布 CI 使用 `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 生成 updater signatures。`latest.json` 指向版本化 GitHub Release 的平台更新包。只有非 draft、非 prerelease 发布会更新固定的 `desktop-latest` feed release，客户端只读取该固定 feed。
 
 ## 平台发布矩阵
 
