@@ -40,9 +40,9 @@ Resolve conflicts by ownership:
 - Prefer upstream for shared runtime, CLI, SDK, and Web Shell internals.
 - Preserve OpenWork behavior in `packages/desktop-shell`, OpenWork customization under `packages/web-shell/client/openwork`, migration code, OpenWork channel adapters, and desktop release workflows.
 - Review `package.json`, lockfiles, branding, application identifiers, updater endpoints, and release secrets rather than taking either side wholesale.
-- Treat every added `.github/workflows/*.yml` file as disabled until it is reviewed and added to `.github/scripts/openwork-workflows.test.mjs`.
+- Treat every added `.github/workflows/*.yml` file as unapproved until it is reviewed and added to `.github/scripts/openwork-workflows.test.mjs` with an explicit GitHub Actions state.
 
-Do not commit or push the sync branch yet. First delete every unapproved workflow, review changes to the retained workflows, and run the workflow allowlist test locally. This matters because GitHub can execute a workflow as soon as its branch is pushed; the CI check is a review backstop, not an execution sandbox.
+Do not push a sync branch that introduces an unreviewed workflow. Review every workflow change, run the workflow inventory test locally, and verify the repository-side state of retained disabled workflows with `gh workflow list --all`. The inventory test records reviewed files; GitHub stores whether each workflow is enabled or disabled.
 
 After resolving conflicts, run the checks for the touched packages plus:
 
@@ -56,7 +56,7 @@ Commit the reviewed merge, then open a PR to `main` that names the upstream befo
 
 ## Workflow policy
 
-OpenWork intentionally keeps only these workflows:
+OpenWork intentionally enables only these workflows:
 
 | Workflow              | Purpose                                                   |
 | --------------------- | --------------------------------------------------------- |
@@ -69,9 +69,9 @@ OpenWork intentionally keeps only these workflows:
 
 Qwen-specific jobs inside a retained workflow must also remain repository-gated. In particular, OpenWork's `ci.yml` does not run the model-backed merge-queue integration job because the repository does not own its `OPENAI_*` credentials.
 
-These workflows were imported with the Qwen Code baseline and are deliberately absent from OpenWork:
+These Qwen Code workflows remain checked in for upstream maintenance but are disabled in the `modelstudioai/openwork` GitHub Actions settings:
 
-| Disabled workflow               | Why it is disabled                                                          | Restore only when                                            |
+| Disabled workflow               | Why it is disabled                                                          | Enable only when                                             |
 | ------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `audio-capture-prebuilds.yml`   | Produces an artifact for Qwen package publishing; OpenWork has no consumer  | An OpenWork release downloads and ships the artifact         |
 | `docs-page-action.yml`          | The repository has no GitHub Pages site                                     | Pages is configured with an OpenWork-owned source and domain |
@@ -85,7 +85,7 @@ These workflows were imported with the Qwen Code baseline and are deliberately a
 
 Other Qwen release, publishing, issue, PR bot, mirror, and runner-maintenance workflows remain absent for the same ownership reason. They depend on Qwen-owned infrastructure, credentials, labels, artifact consumers, or repository policy.
 
-To enable another workflow, add it in a separate PR that documents its trigger, permissions, secrets, runners, owner, failure response, and artifact consumer. Then add its filename to the allowlist test. A copied upstream workflow must never become active only because an upstream merge added the file.
+To enable a disabled workflow, use a separate PR that documents its trigger, permissions, secrets, runners, owner, failure response, and artifact consumer, then run `gh workflow enable <filename> --repo modelstudioai/openwork`. A copied upstream workflow must never become active only because an upstream merge added the file.
 
 ## Day-to-day development
 
