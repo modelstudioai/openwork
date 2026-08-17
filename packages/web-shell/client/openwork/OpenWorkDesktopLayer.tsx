@@ -8,10 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { WebShellApi } from '../App';
-import type {
-  WebShellComposerApi,
-  WebShellComposerToolbarRenderInfo,
-} from '../customization';
+import type { WebShellComposerApi } from '../customization';
 import {
   WEB_SHELL_LANGUAGES,
   normalizeLanguage,
@@ -274,67 +271,6 @@ export function OpenWorkWelcomeFooter({
           {starter}
         </button>
       ))}
-    </div>
-  );
-}
-
-export function OpenWorkComposerTools({
-  text,
-  runCommand,
-  disabled,
-}: WebShellComposerToolbarRenderInfo) {
-  const { t } = useI18n();
-  const [effort, setEffort] = useState('default');
-  const trimmed = text.trim();
-  const words = trimmed ? trimmed.split(/\s+/u).length : 0;
-  const characters = [...text].length;
-  const toggleExpanded = (button: HTMLButtonElement) => {
-    const composer = button.closest('[data-web-shell-composer]');
-    if (!composer) return;
-    composer.toggleAttribute(
-      'data-openwork-expanded',
-      !composer.hasAttribute('data-openwork-expanded'),
-    );
-  };
-  return (
-    <div className={styles.composerTools}>
-      {trimmed && (
-        <span
-          className={styles.characterCount}
-          aria-label={t('openwork.composer.countLabel', {
-            words,
-            characters,
-          })}
-          aria-live="polite"
-        >
-          {t('openwork.composer.count', { words, characters })}
-        </span>
-      )}
-      <select
-        aria-label={t('openwork.composer.effort')}
-        value={effort}
-        disabled={disabled}
-        onChange={(event) => {
-          const value = event.target.value;
-          setEffort(value);
-          runCommand(`/effort ${value}`);
-        }}
-      >
-        <option value="default">{t('openwork.effort.default')}</option>
-        <option value="low">{t('openwork.effort.low')}</option>
-        <option value="medium">{t('openwork.effort.medium')}</option>
-        <option value="high">{t('openwork.effort.high')}</option>
-        <option value="xhigh">{t('openwork.effort.xhigh')}</option>
-        <option value="max">{t('openwork.effort.max')}</option>
-      </select>
-      <button
-        type="button"
-        aria-label={t('openwork.composer.expand')}
-        title={t('openwork.composer.expand')}
-        onClick={(event) => toggleExpanded(event.currentTarget)}
-      >
-        ↗
-      </button>
     </div>
   );
 }
@@ -728,12 +664,6 @@ export function OpenWorkDesktopLayer({
       if (command && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setPaletteOpen(true);
-      }
-      if (command && event.shiftKey && event.key.toLowerCase() === 'e') {
-        event.preventDefault();
-        document
-          .querySelector('[data-web-shell-composer]')
-          ?.toggleAttribute('data-openwork-expanded');
       }
       if (command && ['+', '=', '-', '0'].includes(event.key)) {
         event.preventDefault();

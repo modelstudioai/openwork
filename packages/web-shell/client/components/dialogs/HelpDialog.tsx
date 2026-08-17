@@ -89,7 +89,6 @@ const GENERAL_SHORTCUTS: Array<[string, string]> = [
   ['Alt+Left/Right', 'help.shortcut.altWords'],
   ['Up/Down', 'help.shortcut.history'],
   ['Cmd/Ctrl+K', 'help.shortcut.commandPalette'],
-  ['Cmd/Ctrl+Shift+E', 'help.shortcut.expandComposer'],
 ];
 
 function commandSignature(command: CommandInfo): string {

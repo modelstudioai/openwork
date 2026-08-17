@@ -21,7 +21,6 @@ import type { WebShellApi } from './App';
 import type { WebShellComposerApi } from './customization';
 import {
   notifyOpenWorkTurnComplete,
-  OpenWorkComposerTools,
   OpenWorkDesktopLayer,
   OpenWorkWelcomeFooter,
   openInOpenWorkBrowser,
@@ -230,7 +229,6 @@ function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
             renderWelcomeFooter: () => (
               <OpenWorkWelcomeFooter composerRef={composerRef} />
             ),
-            renderComposerToolbarEnd: OpenWorkComposerTools,
           }}
         />
         <OpenWorkDesktopLayer

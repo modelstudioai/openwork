@@ -17,9 +17,7 @@ management implementations.
 
 - Add an OpenWork command palette on `Cmd/Ctrl+K` with six deduplicated recent
   commands.
-- Add starter prompts, a six-level thinking picker backed by the existing
-  `/effort` command, `Cmd/Ctrl+Shift+E`, composer expand/collapse, and live word
-  and character counts.
+- Add starter prompts.
 - Add persistent appearance controls for 50–200% interface zoom, small/default/
   large chat text, comfortable/wide/full transcript widths, high contrast, and
   explicit reduced motion.
