@@ -304,7 +304,7 @@ function verifyChecksum(archivePath, archiveName, checksums) {
   const expected = checksums
     .split(/\r?\n/)
     .map((line) => line.trim().split(/\s+/))
-    .find(([, fileName]) => fileName === archiveName)?.[0];
+    .find(([, fileName]) => fileName?.replace(/^\*/, '') === archiveName)?.[0];
   if (!expected) {
     throw new Error(`Checksums do not list ${archiveName}`);
   }
