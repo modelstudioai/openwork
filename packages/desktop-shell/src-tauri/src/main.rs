@@ -475,6 +475,10 @@ fn bootstrap_state(
     require_bootstrap_origin(&webview)?;
     let starting = state.starting.load(Ordering::SeqCst) != 0;
     let running = lock(&state.runtime).is_some();
+    let workspace = bootstrap_workspace(
+        lock(&state.last_workspace).clone(),
+        state.settings.workspace(),
+    );
     Ok(BootstrapState {
         desktop_version: env!("CARGO_PKG_VERSION").to_string(),
         status: if running {
@@ -484,12 +488,18 @@ fn bootstrap_state(
         } else {
             "idle"
         },
-        workspace: state
-            .settings
-            .workspace()
-            .map(|path| path.to_string_lossy().into_owned()),
+        workspace: workspace.map(|path| path.to_string_lossy().into_owned()),
         error: lock(&state.last_error).clone(),
     })
+}
+
+fn bootstrap_workspace(
+    last_workspace: Option<(PathBuf, bool)>,
+    persisted_workspace: Option<PathBuf>,
+) -> Option<PathBuf> {
+    last_workspace
+        .map(|(workspace, _)| workspace)
+        .or(persisted_workspace)
 }
 
 #[tauri::command]
@@ -1434,10 +1444,10 @@ fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::{
-        browser_bounds_fit, default_workspace_override_dir, default_workspace_path,
-        ensure_workspace_dir, is_allowed_navigation, is_bootstrap_url, is_safe_deep_link,
-        is_safe_external_url, is_same_origin, load_pet_from_root, origin_of, parse_browser_url,
-        BOOTSTRAP_URL,
+        bootstrap_workspace, browser_bounds_fit, default_workspace_override_dir,
+        default_workspace_path, ensure_workspace_dir, is_allowed_navigation, is_bootstrap_url,
+        is_safe_deep_link, is_safe_external_url, is_same_origin, load_pet_from_root, origin_of,
+        parse_browser_url, BOOTSTRAP_URL,
     };
     #[cfg(target_os = "macos")]
     use super::{
@@ -1451,6 +1461,21 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::Mutex;
     use url::Url;
+
+    #[test]
+    fn bootstrap_prefers_the_workspace_being_started() {
+        let attempted = PathBuf::from("/tmp/attempted");
+        let persisted = PathBuf::from("/tmp/persisted");
+        assert_eq!(
+            bootstrap_workspace(Some((attempted.clone(), false)), Some(persisted.clone())),
+            Some(attempted),
+        );
+        assert_eq!(
+            bootstrap_workspace(None, Some(persisted.clone())),
+            Some(persisted)
+        );
+        assert_eq!(bootstrap_workspace(None, None), None);
+    }
 
     #[cfg(target_os = "macos")]
     #[test]

@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 const packageDir = path.resolve(
@@ -27,6 +28,7 @@ const root = fs.mkdtempSync(
 
 try {
   testDesktopConfiguration();
+  await testBootstrapStartup();
   testMacosPermissions();
   testReleaseWorkflow();
   testElectronBridgeManifest(path.join(root, 'electron-bridge'));
@@ -35,6 +37,71 @@ try {
   console.log('OpenWork desktop release contract checks passed.');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
+}
+
+async function testBootstrapStartup() {
+  const html = fs.readFileSync(
+    path.join(packageDir, 'bootstrap', 'index.html'),
+    'utf8',
+  );
+  assert.match(html, /<body data-state="starting">/);
+  assert.match(html, /body\[data-state='starting'\] \.status/);
+  assert.match(html, /class="mark" src="\.\/openwork-symbol\.png"/);
+
+  const elements = {};
+  const element = (selector) => {
+    elements[selector] ??= {
+      addEventListener(event, listener) {
+        this.listeners ??= {};
+        this.listeners[event] = listener;
+      },
+      style: {},
+    };
+    return elements[selector];
+  };
+  const listeners = {};
+  const body = { dataset: {} };
+  let resolveBootstrapState;
+  vm.runInNewContext(
+    fs.readFileSync(path.join(packageDir, 'bootstrap', 'bootstrap.js'), 'utf8'),
+    {
+      document: { body, querySelector: element },
+      window: {
+        __TAURI__: {
+          core: {
+            invoke: async (command) => {
+              if (command !== 'bootstrap_state') return undefined;
+              return new Promise((resolve) => {
+                resolveBootstrapState = resolve;
+              });
+            },
+          },
+          event: {
+            listen: async (event, listener) => {
+              listeners[event] = listener;
+            },
+          },
+        },
+      },
+    },
+    { timeout: 5000 },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  listeners['runtime-starting']({ payload: '/tmp/attempted' });
+  assert.equal(body.dataset.state, 'starting');
+  assert.equal(element('#workspace').hidden, true);
+  listeners['runtime-failed']({ payload: 'failed' });
+  resolveBootstrapState({
+    desktopVersion: '0.2.0',
+    status: 'idle',
+    workspace: '/tmp/persisted',
+    error: 'failed',
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(body.dataset.state, 'error');
+  assert.equal(element('#workspace').hidden, false);
+  assert.equal(element('#workspace').textContent, '/tmp/attempted');
 }
 
 function testDesktopConfiguration() {
@@ -93,10 +160,7 @@ function testDesktopConfiguration() {
     path.join(packageDir, 'src-tauri', 'windows', 'electron-migration.nsh'),
     'utf8',
   );
-  assert.match(
-    migrationHook,
-    /Software\\d6bd5575-5bf2-5dad-acfe-35e3bbeefd68/,
-  );
+  assert.match(migrationHook, /Software\\d6bd5575-5bf2-5dad-acfe-35e3bbeefd68/);
   assert.match(
     migrationHook,
     /ExecWait '"\$R0\\Uninstall OpenWork\.exe" \/currentuser \/S --updated _\?=\$R0'/,
