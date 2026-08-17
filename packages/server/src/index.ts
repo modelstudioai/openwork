@@ -173,6 +173,7 @@ const waNodeBin = process.env.CRAFT_MESSAGING_NODE_BIN ?? 'node'
 // publisher after bootstrapServer resolves.
 let messagingHandle: MessagingBootstrapHandle | null = null
 
+export async function startServer() {
 const instance = await (async () => {
   try {
     return await bootstrapServer<SessionManager, HandlerDeps>({
@@ -357,5 +358,13 @@ const shutdown = async () => {
   process.exit(0)
 }
 
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+return { host: instance.host, port: instance.port, stop: instance.stop }
+} // end startServer
+
+// Auto-start when running directly (not imported)
+if (import.meta.main || process.argv[1]?.endsWith('/index.ts')) {
+  const { stop } = await startServer()
+  const shutdown = async () => { await stop(); process.exit(0) }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+}
