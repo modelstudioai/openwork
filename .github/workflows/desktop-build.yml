@@ -30,6 +30,8 @@ jobs:
     name: '${{ matrix.name }}'
     runs-on: '${{ matrix.os }}'
     timeout-minutes: 120
+    permissions:
+      contents: 'read'
     strategy:
       fail-fast: false
       matrix:

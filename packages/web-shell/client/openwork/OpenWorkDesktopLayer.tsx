@@ -219,6 +219,13 @@ function parseDeepLink(value: string): void {
   }
 }
 
+export async function drainOpenWorkDeepLinks(
+  take: () => Promise<string[] | undefined>,
+  open: (value: string) => void,
+): Promise<void> {
+  (await take())?.forEach(open);
+}
+
 export function openInOpenWorkBrowser(url: string): boolean {
   let safe = false;
   try {
@@ -743,15 +750,21 @@ export function OpenWorkDesktopLayer({
     if (!listen) return;
     let disposed = false;
     const unlisteners: Array<() => void> = [];
+    const drainPendingDeepLinks = async () => {
+      await drainOpenWorkDeepLinks(
+        () => invokeOpenWork<string[]>('take_pending_deep_links'),
+        (value) => {
+          if (!disposed) parseDeepLink(value);
+        },
+      );
+    };
     void (async () => {
-      const unlisten = await listen<string>('openwork-deep-link', (event) => {
-        parseDeepLink(event.payload);
-        void invokeOpenWork('take_pending_deep_links').catch(() => undefined);
+      const unlisten = await listen<string>('openwork-deep-link', () => {
+        void drainPendingDeepLinks().catch(() => undefined);
       });
       if (disposed) return unlisten();
       unlisteners.push(unlisten);
-      const values = await invokeOpenWork<string[]>('take_pending_deep_links');
-      if (!disposed) values?.forEach(parseDeepLink);
+      await drainPendingDeepLinks();
     })().catch(() => undefined);
     void listen<string>('openwork-menu', (event) => {
       const action = event.payload;

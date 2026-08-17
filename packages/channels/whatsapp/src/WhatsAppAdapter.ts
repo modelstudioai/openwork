@@ -1,4 +1,4 @@
-import { chmod, mkdir, readdir } from 'node:fs/promises';
+import { chmod, mkdir, readdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import makeWASocket, {
@@ -160,8 +160,14 @@ export class WhatsAppChannel extends ChannelBase {
             const error = new Error(
               'WhatsApp logged out; reconfigure the channel to pair again.',
             );
-            failed(error);
             process.stderr.write(`[WhatsApp:${this.name}] ${error.message}\n`);
+            void rm(authDir, { recursive: true, force: true })
+              .catch((cleanupError) => {
+                process.stderr.write(
+                  `[WhatsApp:${this.name}] Failed to clear logged-out credentials: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}\n`,
+                );
+              })
+              .finally(() => failed(error));
             return;
           }
           this.reconnectAttempts += 1;

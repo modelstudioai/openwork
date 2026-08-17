@@ -46,6 +46,10 @@ try {
     path.join(workspace, 'sources', 'config.json'),
     '{"sources":[]}',
   );
+  fs.writeFileSync(
+    path.join(workspace, 'sources', '.credential-cache.json'),
+    '{"token":"do-not-copy"}',
+  );
   const legacySessionDir = path.join(workspace, 'sessions', sessionId);
   fs.mkdirSync(legacySessionDir, { recursive: true });
   fs.writeFileSync(
@@ -155,6 +159,18 @@ try {
   );
   assert.ok(fs.existsSync(archivedLabel));
   assert.equal(
+    fs.existsSync(
+      path.join(
+        qwen,
+        'openwork-legacy-v1',
+        'legacy',
+        'sources',
+        '.credential-cache.json',
+      ),
+    ),
+    false,
+  );
+  assert.equal(
     fs.existsSync(sessionPath(targetCwd, malformedSessionId)),
     false,
   );
@@ -198,8 +214,8 @@ try {
   assert.throws(() => run());
   fs.rmSync(report);
   fs.writeFileSync(path.join(legacy, 'config.json'), '{broken');
-  run();
-  assert.ok(JSON.parse(fs.readFileSync(report, 'utf8')).migratedAt);
+  assert.throws(() => run());
+  assert.equal(fs.existsSync(report), false);
   console.log('OpenWork migration and rollback checks passed.');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

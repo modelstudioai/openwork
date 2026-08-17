@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { randomUUID } from 'node:crypto';
+import { readdir, rename, rm } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
 import { redactLogCredentials } from '@qwen-code/acp-bridge/logRedaction';
 import { canonicalizeWorkspace } from '@qwen-code/acp-bridge/workspacePaths';
 import {
@@ -12,6 +15,7 @@ import {
   type PairingRequest,
 } from '@qwen-code/channel-base';
 import { resolveChannelCwd } from '../commands/channel/channel-cwd.js';
+import { daemonChannelStateDir } from '../commands/channel/runtime.js';
 import { getPlugin } from '../commands/channel/channel-registry.js';
 import type {
   ChannelSecretUpdate,
@@ -71,6 +75,28 @@ export interface ChannelMutationResult {
 
 export interface ChannelPairingRequestsSnapshot {
   requests: PairingRequest[];
+}
+
+async function removeStagedChannelState(stateDir: string): Promise<void> {
+  const parent = dirname(stateDir);
+  const prefix = `${basename(stateDir)}.deleting-`;
+  const entries = await readdir(parent, { withFileTypes: true }).catch(
+    (error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    },
+  );
+  await Promise.all(
+    entries
+      .filter((entry) => entry.name.startsWith(prefix))
+      .map((entry) =>
+        rm(join(parent, entry.name), {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+        }),
+      ),
+  );
 }
 
 export interface ChannelPairingApprovalResult
@@ -443,8 +469,10 @@ export function createChannelManagementService(
     },
     async remove(name, request) {
       assertManageableInstanceName(name);
+      const stateDir = daemonChannelStateDir(opts.workspaceCwd, name);
       const current = opts.store.snapshot();
       if (!Object.hasOwn(current.channels, name)) {
+        await removeStagedChannelState(stateDir);
         throw new ChannelManagementError(
           'channel_instance_not_found',
           `Channel "${name}" is not configured in this workspace.`,
@@ -456,7 +484,22 @@ export function createChannelManagementService(
         assertOwnedRuntime(name);
         await stopChannel(name);
       }
-      const persisted = await opts.store.remove(name, request);
+      const stagedStateDir = `${stateDir}.deleting-${randomUUID()}`;
+      let stagedState = false;
+      try {
+        await rename(stateDir, stagedStateDir);
+        stagedState = true;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      let persisted: ChannelSettingsSnapshot;
+      try {
+        persisted = await opts.store.remove(name, request);
+      } catch (error) {
+        if (stagedState) await rename(stagedStateDir, stateDir);
+        throw error;
+      }
+      await removeStagedChannelState(stateDir);
       diagnostics.delete(name);
       return resultFor(name, persisted);
     },

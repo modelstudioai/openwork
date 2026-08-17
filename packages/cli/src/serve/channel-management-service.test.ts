@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import { PairingStore } from '@qwen-code/channel-base';
 import type { CreatePairingRequestResult } from '@qwen-code/channel-base';
 import { describe, expect, it, vi } from 'vitest';
+import { daemonChannelStateDir } from '../commands/channel/runtime.js';
 import type { ChannelSettingsSnapshot } from './channel-settings-store.js';
 import {
   createChannelManagementService,
@@ -556,6 +557,49 @@ describe('createChannelManagementService', () => {
 
     expect(store.remove).not.toHaveBeenCalled();
     expect(persisted().channels['bot']).toBeDefined();
+  });
+
+  it('removes adapter state when a channel is deleted', async () => {
+    const previousQwenHome = process.env['QWEN_HOME'];
+    const qwenHome = await fs.mkdtemp(
+      path.join(os.tmpdir(), 'channel-management-remove-'),
+    );
+    process.env['QWEN_HOME'] = qwenHome;
+    try {
+      const stateDir = daemonChannelStateDir(WORKSPACE, 'bot');
+      await fs.mkdir(stateDir, { recursive: true });
+      await fs.writeFile(path.join(stateDir, 'credentials.json'), 'secret');
+      const { service, store } = setup({ committedNames: ['bot'] });
+
+      store.remove.mockRejectedValueOnce(new Error('settings write failed'));
+      await expect(
+        service.remove('bot', { expectedRevision: 'rev-1' }),
+      ).rejects.toThrow('settings write failed');
+      await expect(
+        fs.readFile(path.join(stateDir, 'credentials.json'), 'utf8'),
+      ).resolves.toBe('secret');
+
+      await service.remove('bot', { expectedRevision: 'rev-1' });
+
+      await expect(fs.stat(stateDir)).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(store.remove).toHaveBeenCalledWith('bot', {
+        expectedRevision: 'rev-1',
+      });
+
+      const tombstone = `${stateDir}.deleting-stale`;
+      await fs.mkdir(tombstone, { recursive: true });
+      await fs.writeFile(path.join(tombstone, 'credentials.json'), 'secret');
+      await expect(
+        service.remove('bot', { expectedRevision: 'rev-2' }),
+      ).rejects.toMatchObject({ code: 'channel_instance_not_found' });
+      await expect(fs.stat(tombstone)).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      if (previousQwenHome === undefined) delete process.env['QWEN_HOME'];
+      else process.env['QWEN_HOME'] = previousQwenHome;
+      await fs.rm(qwenHome, { recursive: true, force: true });
+    }
   });
 
   it('rejects stale removal before changing runtime state', async () => {

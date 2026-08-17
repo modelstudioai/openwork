@@ -118,6 +118,7 @@ import {
   sendWorkspaceRuntimeUnavailable,
 } from '../workspace-route-runtime.js';
 import type {
+  WorkspaceEntry,
   WorkspaceRegistry,
   WorkspaceRuntime,
 } from '../workspace-registry.js';
@@ -988,39 +989,109 @@ export function registerSessionRoutes(
     });
   };
 
-  const resolveRuntimeForSessionRestore = (
+  const resolveRuntimeForSessionRestore = async (
     body: Record<string, unknown>,
     res: Response,
     route: string,
     sessionId: string,
-  ): { runtime: WorkspaceRuntime; workspaceCwd: string } | undefined => {
+  ): Promise<
+    { runtime: WorkspaceRuntime; workspaceCwd: string } | undefined
+  > => {
     const cwd = parseOptionalWorkspaceCwd(body, boundWorkspace, res);
     if (cwd === undefined) return undefined;
-    let key: string;
-    try {
-      key = canonicalizeWorkspace(cwd);
-    } catch (err) {
-      if ('cwd' in body) {
+    const hasExplicitWorkspace = 'cwd' in body;
+    let key: string | undefined;
+    if (hasExplicitWorkspace) {
+      try {
+        key = canonicalizeWorkspace(cwd);
+      } catch {
         logSessionRoutingFailure(route, 'workspace_mismatch', {
           requestedWorkspace: cwd,
         });
         sendWorkspaceMismatch(res, cwd);
         return undefined;
       }
-      sendBridgeError(res, err, { route, sessionId });
-      return undefined;
     }
 
-    const runtime = workspaceRegistry.resolveWorkspaceCwd(
-      'cwd' in body ? key : undefined,
-    );
-    if (!runtime) {
-      logSessionRoutingFailure(route, 'workspace_mismatch', {
-        requestedWorkspace: key,
-      });
-      sendWorkspaceMismatch(res, key);
+    let runtime: WorkspaceRuntime | undefined;
+    if (hasExplicitWorkspace) {
+      const selectedEntry = workspaceRegistry.getEntryByWorkspaceCwd(key!);
+      if (!selectedEntry) {
+        logSessionRoutingFailure(route, 'workspace_mismatch', {
+          requestedWorkspace: key,
+        });
+        sendWorkspaceMismatch(res, key!);
+        return undefined;
+      }
+      if (selectedEntry.state !== 'active' || !selectedEntry.current) {
+        sendWorkspaceRuntimeUnavailable(res, selectedEntry);
+        return undefined;
+      }
+      runtime = selectedEntry.current.runtime;
+    }
+
+    const liveOwner = workspaceRegistry.resolveLiveSessionOwner(sessionId);
+    if (liveOwner.kind === 'ambiguous') {
+      sendAmbiguousSessionOwner(res, route, sessionId, liveOwner.runtimes);
       return undefined;
     }
+    if (hasExplicitWorkspace) {
+      if (
+        liveOwner.kind === 'found' &&
+        liveOwner.runtime.workspaceCwd !== runtime!.workspaceCwd
+      ) {
+        sendSessionWorkspaceConflict(
+          res,
+          route,
+          sessionId,
+          runtime!,
+          liveOwner.runtime,
+        );
+        return undefined;
+      }
+    } else if (liveOwner.kind === 'found') {
+      runtime = liveOwner.runtime;
+    } else {
+      const persistedOwners: Array<{
+        entry: WorkspaceEntry;
+        runtime: WorkspaceRuntime;
+      }> = [];
+      for (const entry of workspaceRegistry.listEntries()) {
+        const candidate = entry.current?.runtime;
+        if (!candidate) continue;
+        const location =
+          await createWorkspaceRuntimeSessionService(
+            candidate,
+          ).getSessionLocation(sessionId);
+        if (location !== undefined) {
+          persistedOwners.push({ entry, runtime: candidate });
+        }
+      }
+      if (persistedOwners.length > 1) {
+        sendAmbiguousSessionOwner(
+          res,
+          route,
+          sessionId,
+          persistedOwners.map((owner) => owner.runtime),
+        );
+        return undefined;
+      }
+      const persistedOwner = persistedOwners[0];
+      if (persistedOwner) {
+        if (
+          persistedOwner.entry.state !== 'active' ||
+          persistedOwner.entry.current?.runtime !== persistedOwner.runtime
+        ) {
+          sendWorkspaceRuntimeUnavailable(res, persistedOwner.entry);
+          return undefined;
+        }
+        runtime = persistedOwner.runtime;
+      } else {
+        throw new SessionNotFoundError(sessionId);
+      }
+    }
+
+    if (!runtime) throw new SessionNotFoundError(sessionId);
     setDaemonTelemetryWorkspace(res, runtime.workspaceCwd);
     if (!runtime.primary && !runtime.trusted) {
       logSessionRoutingFailure(route, 'untrusted_workspace', {
@@ -1031,25 +1102,6 @@ export function registerSessionRoutes(
         workspaceCwd: runtime.workspaceCwd,
         workspaceId: runtime.workspaceId,
       });
-      return undefined;
-    }
-
-    const liveOwner = workspaceRegistry.resolveLiveSessionOwner(sessionId);
-    if (liveOwner.kind === 'ambiguous') {
-      sendAmbiguousSessionOwner(res, route, sessionId, liveOwner.runtimes);
-      return undefined;
-    }
-    if (
-      liveOwner.kind === 'found' &&
-      liveOwner.runtime.workspaceCwd !== runtime.workspaceCwd
-    ) {
-      sendSessionWorkspaceConflict(
-        res,
-        route,
-        sessionId,
-        runtime,
-        liveOwner.runtime,
-      );
       return undefined;
     }
 
@@ -2080,7 +2132,7 @@ export function registerSessionRoutes(
         | { runtime: WorkspaceRuntime; workspaceCwd: string }
         | undefined;
       try {
-        resolvedRuntime = resolveRuntimeForSessionRestore(
+        resolvedRuntime = await resolveRuntimeForSessionRestore(
           body,
           res,
           route,

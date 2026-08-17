@@ -198,18 +198,18 @@ afterEach(() => {
 });
 
 describe('ChannelsManagerPage', () => {
-  it('shows only the three enabled platforms and configured instances', async () => {
+  it('shows the catalog platforms and configured instances', async () => {
     await renderPage();
 
     expect(container.textContent).toContain('DingTalk Bot');
-    expect(container.textContent).not.toContain('Telegram Bot');
+    expect(container.textContent).toContain('Telegram Bot');
     expect(
       container.querySelectorAll('[data-testid^="channel-platform-"]'),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(container.textContent).toContain('DingTalk');
     expect(container.textContent).toContain('WeCom');
     expect(container.textContent).toContain('Feishu');
-    expect(container.textContent).not.toContain('Telegram');
+    expect(container.textContent).toContain('Telegram');
   });
 
   it('starts a stopped Channel from its card', async () => {

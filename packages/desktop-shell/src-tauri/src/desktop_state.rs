@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -153,7 +153,7 @@ impl SettingsStore {
         let settings = match fs::read_to_string(&path) {
             Ok(contents) => parse_settings(&contents),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                legacy_desktop_settings(app).unwrap_or_default()
+                legacy_desktop_settings(app)?.unwrap_or_default()
             }
             Err(error) => return Err(format!("Failed to read desktop settings: {error}")),
         };
@@ -278,18 +278,44 @@ struct LegacyWorkspaceDefaults {
     working_directory: Option<PathBuf>,
 }
 
-fn legacy_desktop_settings(app: &AppHandle) -> Option<DesktopSettings> {
-    let home = app.path().home_dir().ok()?;
+fn legacy_desktop_settings(app: &AppHandle) -> Result<Option<DesktopSettings>, String> {
+    let home = app
+        .path()
+        .home_dir()
+        .map_err(|error| format!("Failed to locate the home directory: {error}"))?;
     let legacy_root = std::env::var_os("OPENWORK_LEGACY_CONFIG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| home.join(".craft-agent"));
     legacy_desktop_settings_from(&legacy_root, &home)
 }
 
-fn legacy_desktop_settings_from(legacy_root: &Path, home: &Path) -> Option<DesktopSettings> {
-    let config: LegacyConfig =
-        serde_json::from_str(&fs::read_to_string(legacy_root.join("config.json")).ok()?).ok()?;
-    let workspace = config
+fn read_legacy_json<T: DeserializeOwned>(path: &Path) -> Result<Option<T>, String> {
+    let contents = match fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(format!(
+                "Failed to read legacy desktop settings at {}: {error}",
+                path.display()
+            ))
+        }
+    };
+    serde_json::from_str(&contents).map(Some).map_err(|error| {
+        format!(
+            "Failed to parse legacy desktop settings at {}: {error}",
+            path.display()
+        )
+    })
+}
+
+fn legacy_desktop_settings_from(
+    legacy_root: &Path,
+    home: &Path,
+) -> Result<Option<DesktopSettings>, String> {
+    let Some(config) = read_legacy_json::<LegacyConfig>(&legacy_root.join("config.json"))? else {
+        return Ok(None);
+    };
+    let selected_workspace = config
         .active_workspace_id
         .as_deref()
         .and_then(|id| {
@@ -299,19 +325,31 @@ fn legacy_desktop_settings_from(legacy_root: &Path, home: &Path) -> Option<Deskt
                 .find(|workspace| workspace.id == id)
         })
         .or_else(|| config.workspaces.first());
-    let workspace = workspace.and_then(|workspace| {
-        let root = expand_legacy_path(&workspace.root_path, &home, &legacy_root);
-        let workspace_config: LegacyWorkspaceConfig = fs::read_to_string(root.join("config.json"))
-            .ok()
-            .and_then(|contents| serde_json::from_str(&contents).ok())
-            .unwrap_or_default();
-        let working_directory = workspace_config
-            .defaults
-            .working_directory
-            .map(|path| expand_legacy_path(&path, &home, &root))
-            .unwrap_or_else(|| root.clone());
-        working_directory.is_dir().then_some(working_directory)
-    });
+    let workspace = match selected_workspace {
+        Some(workspace) => {
+            let root = expand_legacy_path(&workspace.root_path, home, legacy_root);
+            let workspace_config =
+                read_legacy_json::<LegacyWorkspaceConfig>(&root.join("config.json"))?
+                    .unwrap_or_default();
+            let working_directory = workspace_config
+                .defaults
+                .working_directory
+                .map(|path| expand_legacy_path(&path, home, &root))
+                .unwrap_or_else(|| root.clone());
+            match fs::metadata(&working_directory) {
+                Ok(metadata) if metadata.is_dir() => Some(working_directory),
+                Ok(_) => None,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(error) => {
+                    return Err(format!(
+                        "Failed to inspect legacy workspace at {}: {error}",
+                        working_directory.display()
+                    ))
+                }
+            }
+        }
+        None => None,
+    };
     let mut settings = DesktopSettings {
         workspace,
         ..DesktopSettings::default()
@@ -328,7 +366,7 @@ fn legacy_desktop_settings_from(legacy_root: &Path, home: &Path) -> Option<Deskt
     if let Some(pet_enabled) = config.pet_enabled {
         settings.openwork.pet_enabled = pet_enabled;
     }
-    Some(settings)
+    Ok(Some(settings))
 }
 
 fn expand_legacy_path(value: &Path, home: &Path, base: &Path) -> PathBuf {
@@ -504,10 +542,14 @@ mod tests {
         fs::create_dir_all(&legacy).expect("create legacy config");
         fs::write(
             legacy.join("config.json"),
-            format!(
-                r#"{{"activeWorkspaceId":"legacy","workspaces":[{{"id":"legacy","rootPath":"{}"}}],"colorTheme":"nord","keepAwakeWhileRunning":false,"petEnabled":true}}"#,
-                workspace.display()
-            ),
+            serde_json::to_vec(&serde_json::json!({
+                "activeWorkspaceId": "legacy",
+                "workspaces": [{"id": "legacy", "rootPath": workspace}],
+                "colorTheme": "nord",
+                "keepAwakeWhileRunning": false,
+                "petEnabled": true
+            }))
+            .expect("serialize legacy config"),
         )
         .expect("write legacy config");
         fs::write(
@@ -516,12 +558,64 @@ mod tests {
         )
         .expect("write workspace config");
 
-        let settings = legacy_desktop_settings_from(&legacy, &home).expect("legacy settings");
+        let settings = legacy_desktop_settings_from(&legacy, &home)
+            .expect("read legacy settings")
+            .expect("legacy settings");
         assert_eq!(settings.workspace.as_deref(), Some(project.as_path()));
         assert_eq!(settings.openwork.preferences.preset_theme, "nord");
         assert!(!settings.openwork.preferences.keep_awake);
         assert!(settings.openwork.pet_enabled);
         assert!(!home.join(".qwen").exists());
+        fs::remove_dir_all(home).expect("cleanup legacy fixture");
+    }
+
+    #[test]
+    fn rejects_malformed_legacy_settings() {
+        let home = std::env::temp_dir().join(format!(
+            "openwork-malformed-legacy-settings-{}",
+            std::process::id()
+        ));
+        let legacy = home.join(".craft-agent");
+        fs::create_dir_all(&legacy).expect("create legacy config");
+        fs::write(legacy.join("config.json"), "{").expect("write malformed config");
+
+        assert!(legacy_desktop_settings_from(&legacy, &home).is_err());
+        fs::remove_dir_all(home).expect("cleanup legacy fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reports_legacy_workspace_metadata_errors() {
+        use std::os::unix::fs::symlink;
+
+        let home = std::env::temp_dir().join(format!(
+            "openwork-invalid-legacy-workspace-{}",
+            std::process::id()
+        ));
+        let legacy = home.join(".craft-agent");
+        let workspace = home.join("workspace");
+        let loop_path = workspace.join("loop");
+        fs::create_dir_all(&legacy).expect("create legacy config");
+        fs::create_dir_all(&workspace).expect("create workspace");
+        symlink("loop", &loop_path).expect("create symlink loop");
+        fs::write(
+            legacy.join("config.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "workspaces": [{"id": "legacy", "rootPath": workspace}]
+            }))
+            .expect("serialize legacy config"),
+        )
+        .expect("write legacy config");
+        fs::write(
+            workspace.join("config.json"),
+            serde_json::to_vec(&serde_json::json!({
+                "defaults": {"workingDirectory": loop_path}
+            }))
+            .expect("serialize workspace config"),
+        )
+        .expect("write workspace config");
+
+        assert!(legacy_desktop_settings_from(&legacy, &home).is_err());
         fs::remove_dir_all(home).expect("cleanup legacy fixture");
     }
 

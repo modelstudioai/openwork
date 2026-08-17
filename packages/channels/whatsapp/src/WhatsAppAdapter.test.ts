@@ -144,12 +144,15 @@ describe('WhatsApp connection lifecycle', () => {
       lastDisconnect: { error: { output: { statusCode: 401 } } },
     });
 
-    expect(onTerminalDisconnect).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(onTerminalDisconnect).toHaveBeenCalledOnce());
     expect(onTerminalDisconnect).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('logged out'),
       }),
     );
+    await vi.waitFor(async () => {
+      await expect(stat(stateDir)).rejects.toMatchObject({ code: 'ENOENT' });
+    });
     await adapter.disconnect();
   });
 
@@ -165,6 +168,7 @@ describe('WhatsApp connection lifecycle', () => {
     });
 
     await expect(connecting).rejects.toThrow('logged out');
+    await expect(stat(stateDir)).rejects.toMatchObject({ code: 'ENOENT' });
     expect(onTerminalDisconnect).not.toHaveBeenCalled();
     await adapter.disconnect();
   });

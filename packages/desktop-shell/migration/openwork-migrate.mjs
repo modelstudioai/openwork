@@ -34,14 +34,17 @@ function migrate() {
   const reusedSessions = [];
   const skippedSessions = [];
   const configPath = path.join(legacyRoot, 'config.json');
-  const config = readJson(configPath);
+  const config = readJson(configPath, true);
   const workspaces = Array.isArray(config?.workspaces) ? config.workspaces : [];
 
   for (const workspace of workspaces) {
     if (!workspace || typeof workspace !== 'object') continue;
     const workspaceRoot = resolveLegacyPath(workspace.rootPath);
     if (!workspaceRoot) continue;
-    const workspaceConfig = readJson(path.join(workspaceRoot, 'config.json'));
+    const workspaceConfig = readJson(
+      path.join(workspaceRoot, 'config.json'),
+      true,
+    );
     const targetCwd =
       resolveLegacyPath(
         workspaceConfig?.defaults?.workingDirectory,
@@ -200,6 +203,7 @@ function archiveMetadata(workspaceRoot, workspaceId, createdFiles) {
 }
 
 function copyMetadata(source, destination, createdFiles) {
+  if (path.basename(source) === '.credential-cache.json') return;
   const metadata = fs.lstatSync(source, { throwIfNoEntry: false });
   if (!metadata || metadata.isSymbolicLink()) return;
   if (metadata.isDirectory()) {
@@ -251,7 +255,13 @@ function createFile(destination, contents, createdFiles) {
   if (previous === -1) createdFiles.push(created);
   else createdFiles[previous] = created;
   writeAtomic(reportPath, { version: VERSION, legacyRoot, createdFiles });
-  fs.writeFileSync(destination, contents, { flag: 'wx', mode: 0o600 });
+  const temporary = `${destination}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temporary, contents, { flag: 'wx', mode: 0o600 });
+    fs.renameSync(temporary, destination);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
 }
 
 function writeAtomic(destination, value) {
