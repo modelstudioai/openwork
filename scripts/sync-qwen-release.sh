@@ -132,7 +132,10 @@ if ! git -C "$repo_root" rev-parse --verify --quiet MERGE_HEAD >/dev/null; then
 fi
 
 # OpenWork owns its public identity and CI policy; upstream code stays incremental.
-for overlay in README.md TRADEMARK.md SECURITY.md .github/workflows; do
+for overlay in README.md TRADEMARK.md SECURITY.md .github/workflows \
+  scripts/tests/desktop-oss-workflow.test.js \
+  scripts/tests/no-ak-integration-ci.test.js \
+  scripts/tests/security-workflows.test.js; do
   git -C "$repo_root" rm -r -f --ignore-unmatch -- "$overlay" >/dev/null
   if git -C "$repo_root" cat-file -e "$before_merge:$overlay" 2>/dev/null; then
     git -C "$repo_root" checkout "$before_merge" -- "$overlay"
