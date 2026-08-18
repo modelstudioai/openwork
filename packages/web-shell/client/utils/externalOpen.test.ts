@@ -40,6 +40,15 @@ describe('externalOpen', () => {
     });
   });
 
+  it('drops Chinese prose swallowed by a bare URL', async () => {
+    const invoke = vi.fn().mockResolvedValue(undefined);
+    (window as TauriWindow).__TAURI__ = { core: { invoke } };
+    await openExternalUrl('https://github.com。需要我继续操作吗');
+    expect(invoke).toHaveBeenCalledWith('plugin:opener|open_url', {
+      url: 'https://github.com',
+    });
+  });
+
   it('recognizes only opener-supported external URLs', () => {
     expect(isExternalOpenUrl('https://example.com')).toBe(true);
     expect(isExternalOpenUrl('MAILTO:test@example.com')).toBe(true);

@@ -12,6 +12,8 @@ type TauriInvoke = (
 ) => Promise<unknown>;
 
 const EXTERNAL_OPEN_SCHEMES = /^(https?:|mailto:)/i;
+const CJK_TEXT_AFTER_ASCII_HOST =
+  /^((?:https?):\/\/[a-z0-9.-]+)[\u3002\uff0e\uff61].*$/i;
 
 function tauriInvoke(): TauriInvoke | undefined {
   if (typeof window === 'undefined') return undefined;
@@ -44,6 +46,7 @@ export async function openExternalUrl(url: string): Promise<void> {
   await invoke('plugin:opener|open_url', {
     url: url
       .trim()
+      .replace(CJK_TEXT_AFTER_ASCII_HOST, '$1')
       .replace(EXTERNAL_OPEN_SCHEMES, (scheme) => scheme.toLowerCase()),
   });
 }
