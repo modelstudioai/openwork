@@ -387,6 +387,24 @@ describe('daemonTelemetryMiddleware — recordRequest seam', () => {
     }
   });
 
+  it('normalizes the plural workspace upload route to a stable route label', () => {
+    const mw = daemonTelemetryMiddleware(() => '/ws');
+    const res = mockRes(200);
+    mw(
+      mockReq('POST', '/workspaces/ws-secondary/file/upload'),
+      res,
+      vi.fn() as unknown as NextFunction,
+    );
+    res.emit('finish');
+    expect(coreMocks.withDaemonRequestSpan).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        route: 'POST /workspace/file/upload',
+      }),
+      expect.any(Function),
+    );
+  });
+
   it('attributes plural workspace voice requests to the selected workspace', () => {
     const mw = daemonTelemetryMiddleware(() => '/workspace/secondary');
     for (const [method, path, route] of [
@@ -794,37 +812,29 @@ describe('daemonTelemetryMiddleware — recordRequest seam', () => {
 });
 
 describe('legacy session telemetry route catalog', () => {
-  it('contains 53 unique routes with the audited 46/7 attribution split', () => {
+  it('contains 54 unique routes with the audited 52/2 attribution split', () => {
     const keys = legacySessionTelemetryRoutes.map(
       ({ method, path }) => `${method} ${path}`,
     );
-    expect(keys).toHaveLength(53);
-    expect(new Set(keys).size).toBe(53);
+    expect(keys).toHaveLength(54);
+    expect(new Set(keys).size).toBe(54);
     expect(
       legacySessionTelemetryRoutes.filter(
         ({ attribution }) => attribution === 'handler_resolved',
       ),
-    ).toHaveLength(46);
+    ).toHaveLength(52);
     expect(
       legacySessionTelemetryRoutes.filter(
         ({ attribution }) => attribution === 'pre_resolved',
       ),
-    ).toHaveLength(7);
+    ).toHaveLength(2);
     expect(
       legacySessionTelemetryRoutes
         .filter(({ attribution }) => attribution === 'pre_resolved')
         .map(({ method, path }) => `${method} ${path}`)
         .sort(),
     ).toEqual(
-      [
-        'GET /session/:id/export',
-        'PATCH /session/:id/organization',
-        'POST /permission/:requestId',
-        'POST /session/:id/a2ui-action',
-        'POST /sessions/archive',
-        'POST /sessions/delete',
-        'POST /sessions/unarchive',
-      ].sort(),
+      ['POST /permission/:requestId', 'POST /session/:id/a2ui-action'].sort(),
     );
     for (const entry of legacySessionTelemetryRoutes) {
       expect(entry.route).toBe(`${entry.method} ${entry.path}`);
