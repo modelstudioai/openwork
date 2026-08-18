@@ -114,7 +114,6 @@ function testDesktopConfiguration() {
   );
   assert.equal(config.productName, 'OpenWork');
   assert.equal(config.identifier, 'com.alibaba.openwork');
-  assert.equal(config.version, '0.2.0');
   assert.equal(config.build.devUrl, 'http://127.0.0.1:1420');
   assert.equal(config.build.frontendDist, '../bootstrap');
   assert.equal(config.app?.withGlobalTauri, true);

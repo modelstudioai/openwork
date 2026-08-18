@@ -223,7 +223,7 @@ function verifyMacRuntimeCommit() {
   if (process.platform !== 'darwin') return;
   const manifestPath = path.resolve(
     path.dirname(executable),
-    '../Resources/runtime/qwen-code/manifest.json',
+    '../Resources/runtime/openwork/manifest.json',
   );
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const expected =
