@@ -18,7 +18,7 @@
         "enable": true,
         "scope": ["$HOME/.qwen/pets/**"]
       },
-      "capabilities": ["bootstrap", "runtime", "pet"]
+      "capabilities": ["bootstrap", "runtime", "pet", "web-shell-external-url"]
     }
   },
   "bundle": {

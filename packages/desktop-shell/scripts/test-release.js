@@ -123,9 +123,10 @@ function testDesktopConfiguration() {
     'bootstrap',
     'runtime',
     'pet',
+    'web-shell-external-url',
   ]);
   const capabilities = Object.fromEntries(
-    ['bootstrap', 'runtime', 'pet'].map((name) => [
+    ['bootstrap', 'runtime', 'pet', 'web-shell-external-url'].map((name) => [
       name,
       JSON.parse(
         fs.readFileSync(
@@ -148,6 +149,9 @@ function testDesktopConfiguration() {
     urls: ['http://127.0.0.1:*'],
   });
   assert.deepEqual(capabilities.pet.webviews, ['pet']);
+  assert.deepEqual(capabilities['web-shell-external-url'].remote, {
+    urls: ['http://127.0.0.1:*'],
+  });
   assert.deepEqual(config.app?.security?.assetProtocol, {
     enable: true,
     scope: ['$HOME/.qwen/pets/**'],
