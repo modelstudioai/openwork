@@ -31,6 +31,7 @@ try {
   await testBootstrapStartup();
   testMacosPermissions();
   testReleaseWorkflow();
+  testRuntimePreparationContract();
   testElectronBridgeManifest(path.join(root, 'electron-bridge'));
   testChecksumRefresh(path.join(root, 'checksums'));
   testVersionSynchronization(path.join(root, 'version'));
@@ -122,9 +123,10 @@ function testDesktopConfiguration() {
     'bootstrap',
     'runtime',
     'pet',
+    'web-shell-external-url',
   ]);
   const capabilities = Object.fromEntries(
-    ['bootstrap', 'runtime', 'pet'].map((name) => [
+    ['bootstrap', 'runtime', 'pet', 'web-shell-external-url'].map((name) => [
       name,
       JSON.parse(
         fs.readFileSync(
@@ -147,6 +149,9 @@ function testDesktopConfiguration() {
     urls: ['http://127.0.0.1:*'],
   });
   assert.deepEqual(capabilities.pet.webviews, ['pet']);
+  assert.deepEqual(capabilities['web-shell-external-url'].remote, {
+    urls: ['http://127.0.0.1:*'],
+  });
   assert.deepEqual(config.app?.security?.assetProtocol, {
     enable: true,
     scope: ['$HOME/.qwen/pets/**'],
@@ -321,6 +326,21 @@ function testElectronBridgeManifest(directory) {
   );
   assert.notEqual(failure.status, 0);
   assert.match(failure.stderr, /Expected one Electron bridge artifact/);
+}
+
+function testRuntimePreparationContract() {
+  const source = fs.readFileSync(
+    path.join(packageDir, 'scripts', 'prepare-runtime.js'),
+    'utf8',
+  );
+  assert.match(source, /QWEN_DESKTOP_NODE_CACHE_DIR/);
+  assert.match(
+    source,
+    /const finalPackageRoot = path\.join\(runtimeDir, 'openwork'\)/,
+  );
+  assert.ok(
+    source.indexOf('replaceRuntime();') > source.indexOf('writeChecksums();'),
+  );
 }
 
 function testChecksumRefresh(directory) {

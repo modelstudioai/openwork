@@ -23,7 +23,6 @@ import {
   notifyOpenWorkTurnComplete,
   OpenWorkDesktopLayer,
   OpenWorkWelcomeFooter,
-  openInOpenWorkBrowser,
   recordOpenWorkSession,
 } from './openwork/OpenWorkDesktopLayer';
 import 'katex/dist/katex.min.css';
@@ -127,15 +126,17 @@ function replaceStandaloneSessionUrl(
   window.history.replaceState(null, '', url);
 }
 
-function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
+export function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
   const shellRef = useRef<WebShellApi | null>(null);
   const composerRef = useRef<WebShellComposerApi | null>(null);
   const [theme, setTheme] = useState<WebShellTheme>(() => getInitialTheme());
   const [language, setLanguage] = useState<WebShellLanguage>(() =>
     getInitialLanguage(),
   );
-  const [sessionId] = useState<string | undefined>(() => getSessionIdFromUrl());
-  const [workspaceId] = useState<string | undefined>(() =>
+  const [sessionId, setSessionId] = useState<string | undefined>(() =>
+    getSessionIdFromUrl(),
+  );
+  const [workspaceId, setWorkspaceId] = useState<string | undefined>(() =>
     getWorkspaceIdFromUrl(),
   );
   const [streamingState, setStreamingState] =
@@ -180,6 +181,8 @@ function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
   }, []);
   const handleSessionIdChange = useCallback(
     (nextSessionId?: string, nextWorkspaceId?: string) => {
+      setSessionId(nextSessionId);
+      setWorkspaceId(nextWorkspaceId);
       replaceStandaloneSessionUrl(nextSessionId, nextWorkspaceId);
       if (nextSessionId) recordOpenWorkSession(nextSessionId, nextWorkspaceId);
     },
@@ -223,9 +226,6 @@ function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
             },
             compactThinking: true,
             markdownTableMode: 'advanced',
-            markdown: {
-              onOpenLink: openInOpenWorkBrowser,
-            },
             renderWelcomeFooter: () => (
               <OpenWorkWelcomeFooter composerRef={composerRef} />
             ),

@@ -223,25 +223,6 @@ export async function drainOpenWorkDeepLinks(
   (await take())?.forEach(open);
 }
 
-export function openInOpenWorkBrowser(url: string): boolean {
-  let safe = false;
-  try {
-    const parsed = new URL(url);
-    safe =
-      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-      Boolean(parsed.hostname) &&
-      !parsed.username &&
-      !parsed.password;
-  } catch {
-    // Fall through to the host's normal link handling.
-  }
-  if (!safe || !tauri()?.core?.invoke) return false;
-  window.dispatchEvent(
-    new CustomEvent('openwork:open-browser', { detail: url }),
-  );
-  return true;
-}
-
 export function notifyOpenWorkTurnComplete(): void {
   void invokeOpenWork('notify_turn_complete', {
     title: 'OpenWork',
