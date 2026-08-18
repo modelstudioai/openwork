@@ -944,6 +944,7 @@ jobs:
           path: 'coverage_artifact' # Download to a specific directory
 
       - name: 'Post Coverage Comment using Composite Action'
+        continue-on-error: true
         uses: './.github/actions/post-coverage-comment' # Path to the composite action directory
         with:
           cli_json_file: 'coverage_artifact/cli/coverage/coverage-summary.json'

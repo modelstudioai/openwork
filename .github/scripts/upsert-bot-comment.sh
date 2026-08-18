@@ -33,7 +33,9 @@ marker="${3:?missing marker}"
 body_file="${4:?missing body file}"
 update_only="${5:-}"
 
-body="$(cat "${body_file}")"
+comment_payload() {
+  jq -n --rawfile body "${body_file}" '{body: $body}'
+}
 
 for _attempt in 1 2 3; do
   if bot_login="${BOT_LOGIN:-}" \
@@ -49,17 +51,18 @@ for _attempt in 1 2 3; do
           | select((.body // "") | contains($marker))]
         | last | .id // empty')"; then
     if [ -n "${existing_id}" ]; then
-      if gh api --method PATCH \
+      if comment_payload | gh api --method PATCH \
         "repos/${repo}/issues/comments/${existing_id}" \
-        -f body="${body}" >/dev/null; then
+        --input - >/dev/null; then
         echo "updated comment ${existing_id}"
         exit 0
       fi
     elif [ "${update_only}" = "--update-only" ]; then
       echo "no existing comment; nothing to update"
       exit 0
-    elif gh api "repos/${repo}/issues/${number}/comments" \
-      -f body="${body}" >/dev/null; then
+    elif comment_payload | gh api --method POST \
+      "repos/${repo}/issues/${number}/comments" \
+      --input - >/dev/null; then
       echo "posted new comment"
       exit 0
     fi
