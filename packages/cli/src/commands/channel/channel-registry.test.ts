@@ -791,7 +791,7 @@ describe('channel registry', () => {
         required: true,
       }),
     );
-    for (const type of ['dingtalk', 'wecom', 'feishu'] as const) {
+    for (const type of ['telegram', 'dingtalk', 'wecom', 'feishu'] as const) {
       const fields = catalog.find((entry) => entry.type === type)?.fields;
       expect(
         fields
@@ -878,9 +878,6 @@ describe('channel registry', () => {
         default: 'chat_thread',
       }),
     );
-    expect(
-      catalog.find((entry) => entry.type === 'telegram')?.fields,
-    ).not.toContainEqual(expect.objectContaining({ key: 'sessionScope' }));
     expect(
       catalog.find((entry) => entry.type === 'dingtalk')?.fields,
     ).toContainEqual(
