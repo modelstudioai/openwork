@@ -616,8 +616,6 @@ fn runtime_arguments(workspace: &Path) -> Vec<OsString> {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(windows)]
-    use super::layout_from_root;
     use super::{
         append_failure_output, parse_listening_url, resolve_workspace, runtime_arguments,
         DesktopRuntime, RuntimeStopped, FAILURE_OUTPUT_LIMIT,
