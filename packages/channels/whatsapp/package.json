@@ -1,6 +1,6 @@
 {
   "name": "@qwen-code/channel-whatsapp",
-  "version": "0.21.10",
+  "version": "0.21.13",
   "description": "WhatsApp channel adapter for Qwen Code",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +20,7 @@
     "test:ci": "vitest run"
   },
   "dependencies": {
-    "@qwen-code/channel-base": "0.21.10",
+    "@qwen-code/channel-base": "0.21.13",
     "@whiskeysockets/baileys": "^6.7.0"
   },
   "devDependencies": {
