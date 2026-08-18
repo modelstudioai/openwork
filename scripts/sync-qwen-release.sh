@@ -75,6 +75,11 @@ if [[ "$tag" != "$baseline_tag" ]]; then
     "refs/tags/$tag:refs/tags/$tag"
 fi
 
+if [[ "$tag" == "$baseline_tag" ]]; then
+  echo "Qwen Code $tag is already synced."
+  exit 0
+fi
+
 if [[ "$mode" == create ]]; then
   branch="cx/sync-qwen-$tag"
   worktree="$repo_root/.worktrees/openwork-qwen-$tag"
@@ -106,11 +111,6 @@ fi
 if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
   echo "Sync worktree must be clean: $repo_root" >&2
   exit 1
-fi
-
-if [[ "$tag" == "$baseline_tag" ]]; then
-  echo "Qwen Code $tag is already synced."
-  exit 0
 fi
 
 git -C "$repo_root" update-ref "$state_ref" HEAD
