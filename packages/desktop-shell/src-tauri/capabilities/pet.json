@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pet",
+  "description": "Allows the local desktop pet to load its sprite and move its window.",
+  "webviews": ["pet"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "allow-resolve-pet-sprite"
+  ]
+}

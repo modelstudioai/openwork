@@ -53,6 +53,7 @@
     "@qwen-code/channel-gitlab": "file:../channels/gitlab",
     "@qwen-code/channel-qqbot": "file:../channels/qqbot",
     "@qwen-code/channel-telegram": "file:../channels/telegram",
+    "@qwen-code/channel-whatsapp": "file:../channels/whatsapp",
     "@qwen-code/channel-wecom": "file:../channels/wecom",
     "@qwen-code/channel-weixin": "file:../channels/weixin",
     "@qwen-code/qwen-code-core": "file:../core",

@@ -4,8 +4,21 @@ import {
   useMemo,
   type PropsWithChildren,
 } from 'react';
+import DE from '../../desktop/packages/shared/src/i18n/locales/de.json';
+import ES from '../../desktop/packages/shared/src/i18n/locales/es.json';
+import HU from '../../desktop/packages/shared/src/i18n/locales/hu.json';
+import JA from '../../desktop/packages/shared/src/i18n/locales/ja.json';
+import PL from '../../desktop/packages/shared/src/i18n/locales/pl.json';
 
-export const WEB_SHELL_LANGUAGES = ['en', 'zh-CN'] as const;
+export const WEB_SHELL_LANGUAGES = [
+  'en',
+  'de',
+  'es',
+  'hu',
+  'ja',
+  'pl',
+  'zh-CN',
+] as const;
 
 export type WebShellLanguage = (typeof WEB_SHELL_LANGUAGES)[number];
 
@@ -518,6 +531,8 @@ const EN: Messages = {
   'approval.option.allowAlwaysTool': 'Always allow for this tool',
   'assistant.branch': 'Branch',
   'assistant.copy': 'Copy',
+  'assistant.copied': 'Copied',
+  'assistant.copyFailed': 'Copy failed',
   'at.category.extensions': 'Extensions',
   'at.category.extensions.description': 'Reference active extensions',
   'at.category.files': 'Files',
@@ -1410,6 +1425,7 @@ const EN: Messages = {
   'help.shortcut.commandMenu': 'Open command menu',
   'help.shortcut.completion': 'Accept completion or switch help tabs',
   'help.shortcut.history': 'Cycle prompt history or scroll lists',
+  'help.shortcut.commandPalette': 'Open the command palette',
   'help.shortcut.searchHistory': 'Search prompt history',
   'help.shortcut.newline': 'Insert a newline',
   'help.shortcut.pasteImages': 'Paste images',
@@ -2776,8 +2792,67 @@ const EN: Messages = {
   'settings.label.ui.chatWidth': 'Chat width',
   'settings.description.ui.chatWidth':
     'Frontend-only chat content width. Stored in this browser.',
-  'settings.option.ui.chatWidth.1000': 'Regular',
+  'settings.option.ui.chatWidth.840': 'Focused (840 px)',
+  'settings.option.ui.chatWidth.1100': 'Comfortable (1100 px)',
   'settings.option.ui.chatWidth.wide': 'Ultra wide',
+  'openwork.starters.label': 'Starter suggestions',
+  'openwork.starters.review': 'Review the current changes and flag risks',
+  'openwork.starters.explain':
+    'Explain this codebase and suggest the next task',
+  'openwork.starters.fix': 'Find and fix the highest-impact issue',
+  'openwork.appearance.theme': 'Color theme',
+  'openwork.appearance.zoom': 'App zoom',
+  'openwork.appearance.textSize': 'Chat text size',
+  'openwork.appearance.compact': 'Compact',
+  'openwork.appearance.default': 'Default',
+  'openwork.appearance.large': 'Large',
+  'openwork.appearance.contrast': 'High contrast',
+  'openwork.appearance.reduceMotion': 'Reduce motion',
+  'openwork.appearance.keepAwake': 'Keep awake while running',
+  'openwork.appearance.pet': 'Desktop pet',
+  'openwork.palette.label': 'OpenWork command palette',
+  'openwork.palette.search': 'Search commands and recent tasks',
+  'openwork.palette.recent': 'Recently used',
+  'openwork.palette.recentTask': 'Recent',
+  'openwork.action.new': 'New task',
+  'openwork.action.settings': 'Settings',
+  'openwork.action.shortcuts': 'Keyboard shortcuts',
+  'openwork.action.skills': 'Skills marketplace',
+  'openwork.action.channels': 'Channels',
+  'openwork.action.worktree': 'Create permanent worktree project',
+  'openwork.action.browser': 'Open browser dock',
+  'openwork.action.pet': 'Toggle desktop pet',
+  'openwork.action.update': 'Check for updates',
+  'openwork.action.proxy': 'Show proxy status',
+  'openwork.browser.address': 'Browser address',
+  'openwork.browser.back': 'Go back',
+  'openwork.browser.forward': 'Go forward',
+  'openwork.browser.reload': 'Reload browser',
+  'openwork.browser.close': 'Close browser dock',
+  'openwork.worktree.prompt': 'Name for the permanent worktree',
+  'openwork.worktree.creating': 'Creating permanent worktree…',
+  'openwork.worktree.unavailable': 'Could not create the worktree session.',
+  'openwork.worktree.created': (v) => `Created and opened ${v?.branch ?? ''}`,
+  'openwork.update.checking': 'Checking for updates…',
+  'openwork.update.unavailable': 'Updater unavailable',
+  'openwork.update.available': (v) =>
+    `OpenWork ${v?.version ?? ''} is available`,
+  'openwork.update.upToDate': 'OpenWork is up to date',
+  'openwork.update.installPrompt': (v) =>
+    `${v?.status ?? ''}. Download and install it now?`,
+  'openwork.update.installing': 'Downloading and installing update…',
+  'openwork.proxy.direct': 'Direct connection',
+  'openwork.skills.marketplace': 'OpenWork marketplace',
+  'openwork.skills.marketplaceDescription':
+    'Curated skills from ModelStudioAI. Installs into this workspace.',
+  'openwork.skills.install': 'Install',
+  'openwork.skills.installed': 'Installed',
+  'openwork.skills.bailian-cli':
+    'Run Model Studio text, image, video, speech, and file workflows.',
+  'openwork.skills.bailian-docs-llm-wiki':
+    'Look up current Bailian models, APIs, quotas, and error codes.',
+  'openwork.skills.spark-video-episode':
+    'Produce video episodes from script through reviewed final render.',
   'settings.label.visionModel': 'Vision Model',
   'settings.description.visionModel':
     'Image-capable model used as the vision bridge. Leave empty to auto-select.',
@@ -3338,6 +3413,8 @@ const ZH: Messages = {
   'approval.option.allowAlwaysTool': '对此工具始终允许',
   'assistant.branch': '分叉',
   'assistant.copy': '复制',
+  'assistant.copied': '已复制',
+  'assistant.copyFailed': '复制失败',
   'at.category.extensions': '扩展',
   'at.category.extensions.description': '引用已启用扩展',
   'at.category.files': '文件',
@@ -4172,6 +4249,7 @@ const ZH: Messages = {
   'help.shortcut.commandMenu': '打开命令菜单',
   'help.shortcut.completion': '接受补全或切换帮助标签',
   'help.shortcut.history': '切换历史 prompt 或滚动列表',
+  'help.shortcut.commandPalette': '打开命令面板',
   'help.shortcut.searchHistory': '搜索历史 prompt',
   'help.shortcut.newline': '插入换行',
   'help.shortcut.pasteImages': '粘贴图片',
@@ -5442,8 +5520,64 @@ const ZH: Messages = {
   'settings.label.ui.chatWidth': '屏宽',
   'settings.description.ui.chatWidth':
     '纯前端的聊天内容宽度设置，保存在当前浏览器中。',
-  'settings.option.ui.chatWidth.1000': '常规',
+  'settings.option.ui.chatWidth.840': '聚焦（840 px）',
+  'settings.option.ui.chatWidth.1100': '舒适（1100 px）',
   'settings.option.ui.chatWidth.wide': '超宽',
+  'openwork.starters.label': '快捷建议',
+  'openwork.starters.review': '检查当前改动并指出风险',
+  'openwork.starters.explain': '解释这个代码库并建议下一项任务',
+  'openwork.starters.fix': '查找并修复影响最大的问题',
+  'openwork.appearance.theme': '颜色主题',
+  'openwork.appearance.zoom': '应用缩放',
+  'openwork.appearance.textSize': '聊天文字大小',
+  'openwork.appearance.compact': '紧凑',
+  'openwork.appearance.default': '默认',
+  'openwork.appearance.large': '大',
+  'openwork.appearance.contrast': '高对比度',
+  'openwork.appearance.reduceMotion': '减少动态效果',
+  'openwork.appearance.keepAwake': '任务运行时保持唤醒',
+  'openwork.appearance.pet': '桌面宠物',
+  'openwork.palette.label': 'OpenWork 命令面板',
+  'openwork.palette.search': '搜索命令和最近任务',
+  'openwork.palette.recent': '最近使用',
+  'openwork.palette.recentTask': '最近任务',
+  'openwork.action.new': '新建任务',
+  'openwork.action.settings': '设置',
+  'openwork.action.shortcuts': '键盘快捷键',
+  'openwork.action.skills': '技能市场',
+  'openwork.action.channels': '频道',
+  'openwork.action.worktree': '创建永久 Worktree 项目',
+  'openwork.action.browser': '打开浏览器侧栏',
+  'openwork.action.pet': '切换桌面宠物',
+  'openwork.action.update': '检查更新',
+  'openwork.action.proxy': '显示代理状态',
+  'openwork.browser.address': '浏览器地址',
+  'openwork.browser.back': '后退',
+  'openwork.browser.forward': '前进',
+  'openwork.browser.reload': '重新加载浏览器',
+  'openwork.browser.close': '关闭浏览器侧栏',
+  'openwork.worktree.prompt': '请输入永久 Worktree 名称',
+  'openwork.worktree.creating': '正在创建永久 Worktree…',
+  'openwork.worktree.unavailable': '无法创建 Worktree 会话。',
+  'openwork.worktree.created': (v) => `已创建并打开 ${v?.branch ?? ''}`,
+  'openwork.update.checking': '正在检查更新…',
+  'openwork.update.unavailable': '更新服务不可用',
+  'openwork.update.available': (v) => `OpenWork ${v?.version ?? ''} 可用`,
+  'openwork.update.upToDate': 'OpenWork 已是最新版本',
+  'openwork.update.installPrompt': (v) =>
+    `${v?.status ?? ''}。现在下载并安装吗？`,
+  'openwork.update.installing': '正在下载并安装更新…',
+  'openwork.proxy.direct': '直连',
+  'openwork.skills.marketplace': 'OpenWork 技能市场',
+  'openwork.skills.marketplaceDescription':
+    '由 ModelStudioAI 精选，安装到当前工作区。',
+  'openwork.skills.install': '安装',
+  'openwork.skills.installed': '已安装',
+  'openwork.skills.bailian-cli': '运行百炼文本、图像、视频、语音和文件工作流。',
+  'openwork.skills.bailian-docs-llm-wiki':
+    '查询最新百炼模型、API、配额和错误码。',
+  'openwork.skills.spark-video-episode':
+    '从脚本到审核完成的最终渲染，制作视频剧集。',
   'settings.category.General': '通用',
   'settings.category.UI': '界面',
   'settings.category.Privacy': '隐私',
@@ -5553,13 +5687,59 @@ const ZH: Messages = {
   'welcome.tipLabel': '提示：',
 };
 
+const LEGACY_MESSAGE_ALIASES: Record<string, string> = {
+  'openwork.appearance.theme': 'settings.appearance.colorTheme',
+  'openwork.palette.label': 'commands.title',
+  'openwork.palette.search': 'commands.searchCommands',
+  'openwork.action.new': 'session.newSession',
+  'openwork.action.settings': 'sidebar.settings',
+  'openwork.action.shortcuts': 'menu.keyboardShortcuts',
+  'openwork.action.skills': 'common.skill',
+  'openwork.action.channels': 'settings.messaging.title',
+  'openwork.action.browser': 'link.openInBuiltInBrowser',
+  'openwork.action.update': 'menu.checkForUpdates',
+  'openwork.browser.address': 'browser.urlPlaceholder',
+  'openwork.browser.close': 'common.close',
+  'openwork.update.checking': 'settings.about.checkNow',
+  'openwork.update.available': 'settings.about.updateReady',
+};
+
+function legacyMessages(catalog: Record<string, string>): Messages {
+  const messages: Messages = {};
+  const format = (value: string): MessageValue =>
+    value.includes('{{')
+      ? (vars) =>
+          value.replace(/\{\{(\w+)\}\}/g, (_, key: string) =>
+            String(vars?.[key] ?? ''),
+          )
+      : value;
+  for (const key of Object.keys(EN)) {
+    if (catalog[key]) messages[key] = format(catalog[key]);
+  }
+  for (const [key, legacyKey] of Object.entries(LEGACY_MESSAGE_ALIASES)) {
+    const value = catalog[legacyKey];
+    if (value) messages[key] = format(value);
+  }
+  return messages;
+}
+
 const MESSAGES: Record<WebShellLanguage, Messages> = {
   en: EN,
+  de: legacyMessages(DE),
+  es: legacyMessages(ES),
+  hu: legacyMessages(HU),
+  ja: legacyMessages(JA),
+  pl: legacyMessages(PL),
   'zh-CN': ZH,
 };
 
 const LANGUAGE_LABELS: Record<WebShellLanguage, string> = {
   en: 'English [en]',
+  de: 'Deutsch [de]',
+  es: 'Español [es]',
+  hu: 'Magyar [hu]',
+  ja: '日本語 [ja]',
+  pl: 'Polski [pl]',
   'zh-CN': '中文 [zh-CN]',
 };
 
@@ -5574,12 +5754,18 @@ const Context = createContext<{
 export function normalizeLanguage(
   value: string | undefined | null,
 ): WebShellLanguage {
-  const normalized = value?.trim().toLowerCase();
-  if (!normalized) return 'en';
-  if (normalized === 'zh' || normalized === 'zh-cn' || normalized === 'zh_cn') {
+  return parseLanguage(value) ?? 'en';
+}
+
+function parseLanguage(value: string | undefined | null) {
+  const normalized = value?.trim().toLowerCase().replace(/_/g, '-');
+  if (!normalized) return undefined;
+  if (normalized === 'zh' || normalized === 'zh-cn' || normalized === 'zh-hans')
     return 'zh-CN';
-  }
-  return 'en';
+  const base = normalized.split('-')[0];
+  return WEB_SHELL_LANGUAGES.find(
+    (language) => language.toLowerCase() === normalized || language === base,
+  );
 }
 
 export function languageSettingToWebShellLanguage(
@@ -5593,22 +5779,9 @@ export function languageSettingToWebShellLanguage(
       typeof navigator !== 'undefined' ? navigator.language : undefined,
     );
   }
-  if (
-    normalized === 'zh' ||
-    normalized === 'zh-cn' ||
-    normalized === 'chinese' ||
-    normalized === '中文'
-  ) {
-    return 'zh-CN';
-  }
-  if (
-    normalized === 'en' ||
-    normalized === 'en-us' ||
-    normalized === 'english'
-  ) {
-    return 'en';
-  }
-  return undefined;
+  if (normalized === 'chinese' || normalized === '中文') return 'zh-CN';
+  if (normalized === 'english') return 'en';
+  return parseLanguage(normalized);
 }
 
 export function languageLabel(language: WebShellLanguage): string {

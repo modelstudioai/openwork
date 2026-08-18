@@ -65,6 +65,8 @@ export interface WebShellMarkdownChartCustomization {
 }
 
 export interface WebShellMarkdownCustomization {
+  /** Return true when the host handled a safe HTTP(S) link. */
+  onOpenLink?: (url: string) => boolean;
   transformMarkdown?: (
     markdown: string,
     context: MarkdownRenderContext,
@@ -350,12 +352,19 @@ export interface WebShellComposerApi {
   submit(input?: WebShellComposerInput): void;
 }
 
-export interface WebShellComposerToolbarRenderInfo {
+export interface WebShellComposerRenderInfo {
   disabled: boolean;
   isRunning: boolean;
   currentMode: string;
   currentModel: string;
   sessionName?: string;
+}
+
+export interface WebShellComposerToolbarRenderInfo
+  extends WebShellComposerRenderInfo {
+  text: string;
+  submit(input?: WebShellComposerInput): void;
+  runCommand(command: string): void;
 }
 
 export type WebShellComposerToolbarStartRenderInfo =
@@ -373,11 +382,9 @@ export type ComposerToolbarEndRenderer =
 export type ComposerToolbarRightRenderer =
   ComponentType<WebShellComposerToolbarRightRenderInfo>;
 
-export type ComposerHeaderRenderer =
-  ComponentType<WebShellComposerToolbarRenderInfo>;
+export type ComposerHeaderRenderer = ComponentType<WebShellComposerRenderInfo>;
 
-export type ComposerFooterRenderer =
-  ComponentType<WebShellComposerToolbarRenderInfo>;
+export type ComposerFooterRenderer = ComponentType<WebShellComposerRenderInfo>;
 
 // ---- Background task info (public type for footer renderer) ----
 

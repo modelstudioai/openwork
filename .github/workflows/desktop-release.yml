@@ -1,0 +1,134 @@
+name: 'Desktop Release'
+
+run-name: 'Desktop release ${{ inputs.version }}'
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Desktop semantic version, for example 0.2.0'
+        required: true
+        type: 'string'
+      release_name:
+        description: 'Release title. Defaults to openwork-v<version>.'
+        required: false
+        type: 'string'
+      electron_bridge:
+        description: 'Publish Electron-compatible update manifests and payloads for macOS, Windows, and Linux.'
+        required: true
+        default: true
+        type: 'boolean'
+      dry_run:
+        description: 'Build installers without publishing a release.'
+        required: true
+        default: true
+        type: 'boolean'
+      draft:
+        description: 'Create a draft GitHub release.'
+        required: true
+        default: true
+        type: 'boolean'
+      prerelease:
+        description: 'Mark the GitHub release as a prerelease.'
+        required: true
+        default: false
+        type: 'boolean'
+
+permissions:
+  contents: 'read'
+
+concurrency:
+  group: "desktop-release-${{ inputs.dry_run && inputs.version || 'publish' }}"
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    name: 'Validate release'
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 5
+    outputs:
+      release_name: '${{ steps.release.outputs.release_name }}'
+      tag: '${{ steps.release.outputs.tag }}'
+      version: '${{ steps.release.outputs.version }}'
+    steps:
+      - id: 'release'
+        name: 'Validate version and source'
+        shell: 'bash'
+        env:
+          ELECTRON_BRIDGE: '${{ inputs.electron_bridge }}'
+          INPUT_VERSION: '${{ inputs.version }}'
+          INPUT_RELEASE_NAME: '${{ inputs.release_name }}'
+          IS_DRAFT: '${{ inputs.draft }}'
+          IS_DRY_RUN: '${{ inputs.dry_run }}'
+          IS_PRERELEASE: '${{ inputs.prerelease }}'
+          SOURCE_BRANCH: '${{ github.ref_name }}'
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid semantic version: $INPUT_VERSION"
+            exit 1
+          fi
+          if [[ "$IS_DRY_RUN" == "false" && "$SOURCE_BRANCH" != "main" ]]; then
+            echo "::error::Published desktop releases must run from main."
+            exit 1
+          fi
+          if [[ "$IS_PRERELEASE" == "true" && ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            echo "::error::Prereleases require a SemVer prerelease suffix: $INPUT_VERSION"
+            exit 1
+          fi
+          if [[ "$IS_DRY_RUN" == "false" && "$IS_DRAFT" == "false" && "$IS_PRERELEASE" == "false" && ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Published stable releases require an X.Y.Z version: $INPUT_VERSION"
+            exit 1
+          fi
+          if [[ "$ELECTRON_BRIDGE" == "true" ]]; then
+            core="${version%%[-+]*}"
+            IFS='.' read -r major minor _ <<< "$core"
+            if [[ "$major" -eq 0 && "$minor" -lt 2 ]]; then
+              echo "::error::The Electron bridge starts at OpenWork 0.2.0: $INPUT_VERSION"
+              exit 1
+            fi
+          fi
+          if [[ "$INPUT_RELEASE_NAME" == *$'\n'* || "$INPUT_RELEASE_NAME" == *$'\r'* || ${#INPUT_RELEASE_NAME} -gt 200 ]]; then
+            echo "::error::Release names must be a single line up to 200 characters."
+            exit 1
+          fi
+          tag="openwork-v$version"
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "release_name=${INPUT_RELEASE_NAME:-$tag}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: 'Build installers'
+    needs: 'metadata'
+    if: 'inputs.dry_run == true'
+    permissions:
+      contents: 'read'
+    uses: './.github/workflows/desktop-build.yml'
+    with:
+      version: '${{ needs.metadata.outputs.version }}'
+      release_name: '${{ needs.metadata.outputs.release_name }}'
+      tag: '${{ needs.metadata.outputs.tag }}'
+      electron_bridge: '${{ inputs.electron_bridge }}'
+      publish: false
+      draft: '${{ inputs.draft }}'
+      prerelease: '${{ inputs.prerelease }}'
+
+  publish:
+    name: 'Build and publish installers'
+    needs: 'metadata'
+    if: 'inputs.dry_run == false'
+    permissions:
+      contents: 'write'
+    uses: './.github/workflows/desktop-build.yml'
+    with:
+      version: '${{ needs.metadata.outputs.version }}'
+      release_name: '${{ needs.metadata.outputs.release_name }}'
+      tag: '${{ needs.metadata.outputs.tag }}'
+      electron_bridge: '${{ inputs.electron_bridge }}'
+      publish: true
+      draft: '${{ inputs.draft }}'
+      prerelease: '${{ inputs.prerelease }}'
+    secrets: 'inherit'

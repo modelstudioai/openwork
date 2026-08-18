@@ -19,7 +19,7 @@ function descriptor(
 }
 
 describe('Channel platform availability', () => {
-  it('only exposes manageable DingTalk, WeCom, Feishu, GitHub, and GitLab channels', () => {
+  it('only exposes supported manageable channels', () => {
     expect(
       [
         descriptor('dingtalk'),
@@ -28,6 +28,7 @@ describe('Channel platform availability', () => {
         descriptor('github'),
         descriptor('gitlab'),
         descriptor('telegram'),
+        descriptor('whatsapp'),
         descriptor('weixin'),
         descriptor('dingtalk', false),
         descriptor('github', false),
@@ -35,7 +36,15 @@ describe('Channel platform availability', () => {
       ]
         .filter(isChannelPlatformAvailable)
         .map((item) => item.type),
-    ).toEqual(['dingtalk', 'wecom', 'feishu', 'github', 'gitlab']);
+    ).toEqual([
+      'dingtalk',
+      'wecom',
+      'feishu',
+      'github',
+      'gitlab',
+      'telegram',
+      'whatsapp',
+    ]);
   });
 
   it('uses the same allowlist for configured Channel instances', () => {
@@ -44,7 +53,8 @@ describe('Channel platform availability', () => {
     expect(isSupportedChannelType('feishu')).toBe(true);
     expect(isSupportedChannelType('github')).toBe(true);
     expect(isSupportedChannelType('gitlab')).toBe(true);
-    expect(isSupportedChannelType('telegram')).toBe(false);
+    expect(isSupportedChannelType('telegram')).toBe(true);
+    expect(isSupportedChannelType('whatsapp')).toBe(true);
     expect(isSupportedChannelType(undefined)).toBe(false);
   });
 });

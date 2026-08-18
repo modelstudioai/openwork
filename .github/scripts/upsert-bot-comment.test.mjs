@@ -31,14 +31,17 @@ const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'upsert-bot-comment.sh');
 const MARKER = '<!-- test-marker -->';
 
-function run(scenario, { updateOnly = false } = {}) {
+function run(
+  scenario,
+  { updateOnly = false, botLogin = '', body = `${MARKER}\nhello` } = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), 'upsert-bot-comment-'));
   const bin = join(dir, 'bin');
   mkdirSync(bin);
   const calls = join(dir, 'calls');
   writeFileSync(calls, '');
   const bodyFile = join(dir, 'body');
-  writeFileSync(bodyFile, `${MARKER}\nhello`);
+  writeFileSync(bodyFile, body);
   const write = (name, body) => {
     writeFileSync(join(bin, name), body);
     chmodSync(join(bin, name), 0o755);
@@ -49,6 +52,7 @@ function run(scenario, { updateOnly = false } = {}) {
     [
       '#!/bin/bash',
       'echo "$*" >> "$CALLS"',
+      'if [[ "$*" == *"--input -"* ]]; then cat >/dev/null; fi',
       'n=$(grep -c "method GET" "$CALLS" || true)',
       'case "$*" in',
       '  "api user"*)',
@@ -93,6 +97,7 @@ function run(scenario, { updateOnly = false } = {}) {
           PATH: `${bin}:${process.env.PATH}`,
           SCENARIO: scenario,
           CALLS: calls,
+          BOT_LOGIN: botLogin,
         },
       },
     );
@@ -110,6 +115,22 @@ test('POSTs a fresh comment when no bot-authored marker exists', () => {
   assert.equal(r.code, 0);
   assert.match(r.stdout, /posted new comment/);
   assert.doesNotMatch(r.calls, /--method PATCH/);
+});
+
+test('uses BOT_LOGIN when the token cannot access /user', () => {
+  const r = run('user-fails', { botLogin: 'bot' });
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /posted new comment/);
+  assert.doesNotMatch(r.calls, /api user/);
+});
+
+test('streams large comment bodies through stdin', () => {
+  const r = run('fresh', {
+    body: `${MARKER}\n${'x'.repeat(200_000)}`,
+  });
+  assert.equal(r.code, 0);
+  assert.match(r.calls, /--method POST .* --input -/);
+  assert.doesNotMatch(r.calls, /body=/);
 });
 
 test('PATCHes the existing bot-authored marker comment', () => {
@@ -141,7 +162,7 @@ test('--update-only is a no-op success when nothing exists', () => {
   assert.match(r.stdout, /nothing to update/);
   assert.doesNotMatch(r.calls, /--method PATCH/);
   // And no POST either: the only api writes would be comment creation.
-  assert.doesNotMatch(r.calls, /issues\/42\/comments -f/);
+  assert.doesNotMatch(r.calls, /--method POST/);
 });
 
 test('a failed listing NEVER falls through to POST (retries, then PATCHes)', () => {
@@ -151,7 +172,7 @@ test('a failed listing NEVER falls through to POST (retries, then PATCHes)', () 
   const r = run('listing-fails-once');
   assert.equal(r.code, 0);
   assert.match(r.stdout, /updated comment 7/);
-  assert.doesNotMatch(r.calls, /issues\/42\/comments -f/);
+  assert.doesNotMatch(r.calls, /--method POST/);
 });
 
 test('a persistently failing identity lookup exits 1 without writing', () => {

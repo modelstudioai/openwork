@@ -1081,6 +1081,59 @@ describe('multi-workspace session dispatch', () => {
     expect(res.body.features).toContain('multi_workspace_session_shell');
   });
 
+  it('restores an unqualified dormant session through its persisted workspace owner', async () => {
+    await withRuntimeDir(async () => {
+      const sessionId = '00000000-0000-4000-8000-000000000002';
+      await writeStoredSession({
+        sessionId,
+        cwd: SECONDARY_CWD,
+        timestamp: '2026-07-08T00:00:00.000Z',
+        prompt: 'secondary owner',
+        mtime: new Date('2026-07-08T00:00:00.000Z'),
+      });
+      const { app, registry, primaryBridge, secondaryBridge } = makeHarness({
+        primarySummaries: [],
+        secondarySummaries: [],
+      });
+      registry.beginReplacement(registry.primaryEntry, 'policy-2');
+
+      const response = await request(app)
+        .post(`/session/${sessionId}/load`)
+        .set('Host', host())
+        .send({});
+
+      expect(response.status).toBe(200);
+      expect(response.body.workspaceCwd).toBe(SECONDARY_CWD);
+      expect(primaryBridge.restoreCalls).toEqual([]);
+      expect(secondaryBridge.restoreCalls).toEqual([
+        {
+          action: 'load',
+          req: expect.objectContaining({
+            sessionId,
+            workspaceCwd: SECONDARY_CWD,
+          }),
+        },
+      ]);
+    });
+  });
+
+  it('does not fall back to primary for an unqualified unknown session', async () => {
+    const { app, primaryBridge, secondaryBridge } = makeHarness({
+      primarySummaries: [],
+      secondarySummaries: [],
+    });
+
+    const response = await request(app)
+      .post('/session/missing-unqualified/load')
+      .set('Host', host())
+      .send({});
+
+    expect(response.status).toBe(404);
+    expect(response.body.code).toBe('session_not_found');
+    expect(primaryBridge.restoreCalls).toEqual([]);
+    expect(secondaryBridge.restoreCalls).toEqual([]);
+  });
+
   it('aggregates daemon status session count and exposes workspace metadata', async () => {
     const { app } = makeHarness();
     const res = await request(app).get('/daemon/status').set('Host', host());

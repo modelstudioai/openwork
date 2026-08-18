@@ -1,5 +1,5 @@
 .content {
-  font-size: 14px;
+  font-size: calc(14px * var(--openwork-chat-text-scale, 1));
   line-height: 1.6;
   color: var(--foreground);
   font-family: var(--font-sans);

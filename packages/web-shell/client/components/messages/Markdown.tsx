@@ -708,6 +708,7 @@ function MarkdownLink({
   children?: ReactNode;
 }) {
   const renderMode = useTranscriptRenderMode();
+  const { markdown } = useWebShellCustomization();
   if (href && QWEN_SESSION_SCHEME.test(href.trim())) {
     if (renderMode === 'readonly') {
       return <span className={styles.link}>{children}</span>;
@@ -737,6 +738,11 @@ function MarkdownLink({
       target="_blank"
       rel="noopener noreferrer"
       className={styles.link}
+      onClick={(event) => {
+        if (safeHref && markdown?.onOpenLink?.(safeHref)) {
+          event.preventDefault();
+        }
+      }}
     >
       {children}
     </a>

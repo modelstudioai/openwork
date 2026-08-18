@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost; object-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenWork Pet</title>
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+      body {
+        cursor: grab;
+      }
+      .pet {
+        width: 144px;
+        height: 156px;
+        background: url('./qwen-pet.webp') 0 0 / 1152px 1404px no-repeat;
+        animation: idle 6.6s step-end infinite;
+        image-rendering: pixelated;
+        filter: drop-shadow(0 9px 8px rgb(0 0 0 / 35%));
+      }
+      @keyframes idle {
+        0% {
+          background-position: 0 0;
+        }
+        25.4545% {
+          background-position: -144px 0;
+        }
+        35.4545% {
+          background-position: -288px 0;
+        }
+        45.4545% {
+          background-position: -432px 0;
+        }
+        58.1818% {
+          background-position: -576px 0;
+        }
+        70.9091% {
+          background-position: -720px 0;
+        }
+        100% {
+          background-position: 0 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .pet {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body data-tauri-drag-region>
+    <div class="pet" data-tauri-drag-region aria-label="Qwen desktop pet"></div>
+    <script src="./pet.js"></script>
+  </body>
+</html>
