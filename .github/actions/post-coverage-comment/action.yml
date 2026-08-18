@@ -109,6 +109,7 @@ runs:
         ${{ always() }}
       shell: 'bash'
       env:
+        BOT_LOGIN: 'github-actions[bot]'
         GH_TOKEN: '${{ inputs.github_token }}'
         PR_NUMBER: '${{ github.event.pull_request.number }}'
         REPOSITORY: '${{ github.repository }}'

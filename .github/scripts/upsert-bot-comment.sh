@@ -17,6 +17,9 @@
 # path), never the no-op success reserved for a lookup that genuinely
 # found nothing.
 #
+# Set BOT_LOGIN when the token cannot access the /user endpoint, such as a
+# GitHub Actions integration token.
+#
 # Usage: upsert-bot-comment.sh <owner/repo> <issue-number> <marker> <body-file> [--update-only]
 #   --update-only: PATCH an existing bot-authored marker comment if present;
 #                  succeed as a no-op when none exists (never POSTs). For
@@ -33,7 +36,8 @@ update_only="${5:-}"
 body="$(cat "${body_file}")"
 
 for _attempt in 1 2 3; do
-  if bot_login="$(gh api user --jq '.login')" \
+  if bot_login="${BOT_LOGIN:-}" \
+    && { [ -n "${bot_login}" ] || bot_login="$(gh api user --jq '.login')"; } \
     && [ -n "${bot_login}" ] \
     && listing="$(gh api "repos/${repo}/issues/${number}/comments" \
       --method GET \

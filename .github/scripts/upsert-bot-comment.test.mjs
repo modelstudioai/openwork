@@ -31,7 +31,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const script = join(here, 'upsert-bot-comment.sh');
 const MARKER = '<!-- test-marker -->';
 
-function run(scenario, { updateOnly = false } = {}) {
+function run(scenario, { updateOnly = false, botLogin = '' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'upsert-bot-comment-'));
   const bin = join(dir, 'bin');
   mkdirSync(bin);
@@ -93,6 +93,7 @@ function run(scenario, { updateOnly = false } = {}) {
           PATH: `${bin}:${process.env.PATH}`,
           SCENARIO: scenario,
           CALLS: calls,
+          BOT_LOGIN: botLogin,
         },
       },
     );
@@ -110,6 +111,13 @@ test('POSTs a fresh comment when no bot-authored marker exists', () => {
   assert.equal(r.code, 0);
   assert.match(r.stdout, /posted new comment/);
   assert.doesNotMatch(r.calls, /--method PATCH/);
+});
+
+test('uses BOT_LOGIN when the token cannot access /user', () => {
+  const r = run('user-fails', { botLogin: 'bot' });
+  assert.equal(r.code, 0);
+  assert.match(r.stdout, /posted new comment/);
+  assert.doesNotMatch(r.calls, /api user/);
 });
 
 test('PATCHes the existing bot-authored marker comment', () => {
