@@ -24,6 +24,7 @@ import {
   isTooLargeToHighlight,
 } from './codeHighlighter';
 import { useI18n } from '../../i18n';
+import { useExternalLinkOpener } from '../../hooks/useExternalLinkOpener';
 import {
   useWebShellCustomization,
   type MarkdownTableMode,
@@ -709,6 +710,7 @@ function MarkdownLink({
 }) {
   const renderMode = useTranscriptRenderMode();
   const { markdown } = useWebShellCustomization();
+  const openExternalLink = useExternalLinkOpener();
   if (href && QWEN_SESSION_SCHEME.test(href.trim())) {
     if (renderMode === 'readonly') {
       return <span className={styles.link}>{children}</span>;
@@ -741,7 +743,9 @@ function MarkdownLink({
       onClick={(event) => {
         if (safeHref && markdown?.onOpenLink?.(safeHref)) {
           event.preventDefault();
+          return;
         }
+        openExternalLink(event, safeHref);
       }}
     >
       {children}

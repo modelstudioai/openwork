@@ -31,6 +31,7 @@ try {
   await testBootstrapStartup();
   testMacosPermissions();
   testReleaseWorkflow();
+  testRuntimePreparationContract();
   testElectronBridgeManifest(path.join(root, 'electron-bridge'));
   testChecksumRefresh(path.join(root, 'checksums'));
   testVersionSynchronization(path.join(root, 'version'));
@@ -321,6 +322,21 @@ function testElectronBridgeManifest(directory) {
   );
   assert.notEqual(failure.status, 0);
   assert.match(failure.stderr, /Expected one Electron bridge artifact/);
+}
+
+function testRuntimePreparationContract() {
+  const source = fs.readFileSync(
+    path.join(packageDir, 'scripts', 'prepare-runtime.js'),
+    'utf8',
+  );
+  assert.match(source, /QWEN_DESKTOP_NODE_CACHE_DIR/);
+  assert.match(
+    source,
+    /const finalPackageRoot = path\.join\(runtimeDir, 'openwork'\)/,
+  );
+  assert.ok(
+    source.indexOf('replaceRuntime();') > source.indexOf('writeChecksums();'),
+  );
 }
 
 function testChecksumRefresh(directory) {
