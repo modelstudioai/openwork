@@ -24,11 +24,21 @@ import type {
   DaemonSessionArtifactsEnvelope,
   DaemonTranscriptStore,
   DaemonCapabilities,
+  DaemonBranchSessionResult,
+  DaemonBranchedSession,
   PermissionResponse,
 } from '@qwen-code/sdk/daemon';
-import { isDaemonTurnError, type PromptResult } from '@qwen-code/sdk/daemon';
+import {
+  isDaemonTurnError,
+  isStaleBranchPointError,
+  type PromptResult,
+} from '@qwen-code/sdk/daemon';
 import { extractHttpStatus } from './httpErrors.js';
-import { mapSupportedCommands } from './mappers.js';
+import {
+  mapReasoningControls,
+  mapSessionContextReasoning,
+  mapSupportedCommands,
+} from './mappers.js';
 import { toDaemonPromptContent } from './promptContent.js';
 import {
   clearPassiveAssistantDoneTimer,
@@ -44,6 +54,7 @@ import type {
   AddDaemonSessionNotice,
   DaemonConnectionState,
   DaemonNoticeOperation,
+  DaemonPromptFile,
   DaemonPromptStatus,
   DaemonSessionActions,
   SettledPrompt,
@@ -52,6 +63,17 @@ import type {
 
 interface RefBox<T> {
   current: T;
+}
+
+function normalizePromptFiles(
+  files: readonly DaemonPromptFile[] | undefined,
+): Array<{ name: string; text: string; mimeType: string }> {
+  return (files ?? []).map((file) => ({
+    name: file.name,
+    text: file.text,
+    mimeType:
+      file.mimeType || file.mediaType || file.media_type || 'text/plain',
+  }));
 }
 
 const DEFAULT_RESTORE_SERVER_TIMEOUT_MS = 60_000;
@@ -83,9 +105,11 @@ export function resolveSessionRestoreTimeouts(
 function clearPendingLoadTimeout(load: PendingSessionLoad): void {
   if (load.timeout !== undefined) clearTimeout(load.timeout);
 }
+
 export function normalizeWorkspaceIdentity(value: string | undefined): string {
   return value ? value.replace(/\\/g, '/').replace(/\/+$/, '') || '/' : '';
 }
+
 export interface CreateDaemonSessionActionsArgs {
   store: DaemonTranscriptStore;
   sessionRef: RefBox<DaemonSessionClient | undefined>;
@@ -93,6 +117,7 @@ export interface CreateDaemonSessionActionsArgs {
   settledPromptsRef: RefBox<Map<string, SettledPrompt>>;
   pendingSessionLoadRef: RefBox<PendingSessionLoad | undefined>;
   pendingSessionLoadIdRef: RefBox<number>;
+  sessionConfigGeneration: WeakMap<DaemonSessionClient, number>;
   heartbeatSupportedRef: RefBox<boolean>;
   manualSessionClearRef: RefBox<boolean>;
   skipNextCleanupDetachSessionRef: RefBox<DaemonSessionClient | undefined>;
@@ -119,21 +144,8 @@ export interface CreateDaemonSessionActionsArgs {
   setAttachSessionNonce: Dispatch<SetStateAction<number>>;
   setNewSessionNonce: Dispatch<SetStateAction<number>>;
   clearLiveJournalRepair?: () => void;
-  beginCrossSessionTransition?: (
-    request: {
-      sessionId: string;
-      mode: 'load' | 'resume';
-      workspaceCwd?: string;
-      origin: 'action' | 'controlled';
-    },
-    startLegacy: () => Promise<void>,
-  ) => Promise<void>;
-  cancelCrossSessionTransition?: (reason: string) => void;
-  isCrossSessionTransitionPending?: () => boolean;
-  isSourceBoundOperationInFlight?: () => boolean;
-  setSourceBoundOperationInFlight?: (inFlight: boolean) => void;
-  getTransitionOrigin?: () => 'action' | 'controlled';
 }
+
 export function getConnectionAfterSessionClear(
   current: DaemonConnectionState,
   clearedSessionId: string | undefined,
@@ -150,6 +162,7 @@ export function getConnectionAfterSessionClear(
     // check refetch fresh data for the next session.
     delete next.supportedCommands;
     delete next.context;
+    delete next.reasoning;
     // Keep `commands`/`skills`: they are workspace-scoped (skills, custom,
     // MCP-prompt and workflow slash commands all live at the workspace/config
     // level, not the session), so they stay valid after the session is
@@ -169,6 +182,7 @@ export function getConnectionAfterSessionClear(
     missingSession: false,
   };
 }
+
 export function createDaemonSessionActions({
   store,
   sessionRef,
@@ -176,6 +190,7 @@ export function createDaemonSessionActions({
   settledPromptsRef,
   pendingSessionLoadRef,
   pendingSessionLoadIdRef,
+  sessionConfigGeneration,
   heartbeatSupportedRef,
   manualSessionClearRef,
   skipNextCleanupDetachSessionRef,
@@ -196,39 +211,35 @@ export function createDaemonSessionActions({
   setAttachSessionNonce,
   setNewSessionNonce,
   clearLiveJournalRepair = () => undefined,
-  beginCrossSessionTransition,
-  cancelCrossSessionTransition = () => undefined,
-  isCrossSessionTransitionPending = () => false,
-  isSourceBoundOperationInFlight = () => false,
-  setSourceBoundOperationInFlight = () => undefined,
-  getTransitionOrigin = () => 'action',
 }: CreateDaemonSessionActionsArgs): DaemonSessionActions {
   const silentHardFailureNoticeKeys = new Set<string>();
   let noticeOwner = sessionRef.current;
+  let reasoningActionToken = 0;
+  let appliedReasoningActionToken = 0;
+  let modelMutationGeneration = 0;
+  let branchInFlight = false;
 
-  function requireStableSession(): void {
-    if (isCrossSessionTransitionPending()) {
-      throw new DOMException(
-        'A session switch is still preparing',
-        'InvalidStateError',
-      );
-    }
-    if (isSourceBoundOperationInFlight()) {
-      throw new DOMException(
-        'Another session operation is still in progress',
-        'InvalidStateError',
-      );
-    }
+  function trackSessionConfigMutation<T>(
+    session: DaemonSessionClient,
+    operation: Promise<T>,
+  ): Promise<T> {
+    sessionConfigGeneration.set(
+      session,
+      (sessionConfigGeneration.get(session) ?? 0) + 1,
+    );
+    void operation.then(
+      () => finishSessionConfigMutation(session),
+      () => finishSessionConfigMutation(session),
+    );
+    return operation;
   }
 
-  const isCurrentLogicalSession = (session: DaemonSessionClient) => {
-    const current = sessionRef.current;
-    return (
-      current?.sessionId === session.sessionId &&
-      normalizeWorkspaceIdentity(current.workspaceCwd) ===
-        normalizeWorkspaceIdentity(session.workspaceCwd)
+  function finishSessionConfigMutation(session: DaemonSessionClient): void {
+    sessionConfigGeneration.set(
+      session,
+      (sessionConfigGeneration.get(session) ?? 0) + 1,
     );
-  };
+  }
 
   const ignoreStaleNotice: AddDaemonSessionNotice = (notice) => ({
     ...notice,
@@ -241,16 +252,10 @@ export function createDaemonSessionActions({
     noticeOwner = session;
     return addNotice;
   };
-  const noticeForLogicalSession = (session: DaemonSessionClient) =>
-    isCurrentLogicalSession(session) ? addNotice : ignoreStaleNotice;
-  const shouldSettlePromptForSession = (session: DaemonSessionClient) =>
-    sessionRef.current === session ||
-    (isCurrentLogicalSession(session) && !hasSessionActivePrompt());
 
   function clearActiveSessionState() {
     clearLiveJournalRepair();
     silentHardFailureNoticeKeys.clear();
-    noticeOwner = undefined;
     for (const [, active] of activePromptsRef.current) {
       active.controller.abort();
     }
@@ -352,7 +357,7 @@ export function createDaemonSessionActions({
     return loadPromise;
   }
 
-  function startLegacySessionSwitch(
+  function startSessionSwitch(
     sessionId: string,
     mode: 'load' | 'resume',
     workspaceCwd?: string,
@@ -374,6 +379,7 @@ export function createDaemonSessionActions({
       signal,
       replaySource,
     );
+    const pendingLoad = pendingSessionLoadRef.current;
     const currentSession = sessionRef.current;
     const currentSessionId = currentSession?.sessionId;
     const activePrompt = currentSessionId
@@ -386,8 +392,17 @@ export function createDaemonSessionActions({
       activePromptsRef.current.delete(currentSessionId);
     }
     resetCurrentSessionActivePrompt();
+    const targetWorkspaceCwd =
+      workspaceCwd ??
+      currentSession?.workspaceCwd ??
+      // A failed switch leaves the target's workspace on the connection for
+      // error rendering; never let the next workspace-less load inherit it.
+      (getConnection().error ? undefined : getConnection().workspaceCwd);
     const reloadingCurrentSession =
-      mode === 'load' && currentSessionId === sessionId;
+      mode === 'load' &&
+      currentSessionId === sessionId &&
+      normalizeWorkspaceIdentity(currentSession?.workspaceCwd) ===
+        normalizeWorkspaceIdentity(targetWorkspaceCwd);
     if (currentSession) {
       const detachCurrentSession = () =>
         currentSession.detach().catch((error: unknown) => {
@@ -415,6 +430,7 @@ export function createDaemonSessionActions({
         ...current,
         status: 'connecting',
         sessionId,
+        workspaceCwd: targetWorkspaceCwd,
         clientId: undefined,
         displayName: undefined,
         error: undefined,
@@ -430,12 +446,24 @@ export function createDaemonSessionActions({
     if (!reloadingCurrentSession) store.reset();
     setRestoreMode(mode);
     setRestoreSessionId(sessionId);
-    setRestoreWorkspaceCwd(workspaceCwd ?? getConnection().workspaceCwd);
+    setRestoreWorkspaceCwd(targetWorkspaceCwd);
     setRestoreSessionNonce((nonce) => nonce + 1);
     return loadPromise.catch((error: unknown) => {
-      if (!isAbortError(error)) {
+      // The failed target stays visible (sessionId + workspaceCwd) so the UI
+      // can render the load error in context. Only mark the connection as
+      // failed; the next switch's workspace derivation skips a failed
+      // connection so it cannot inherit this target's workspace. While this
+      // load is still the current one — a superseding load has already
+      // replaced the connecting state.
+      if (
+        !isAbortError(error) &&
+        (pendingSessionLoadRef.current === undefined ||
+          pendingSessionLoadRef.current === pendingLoad)
+      ) {
         setConnection((current) => ({
           ...current,
+          error: error instanceof Error ? error.message : String(error),
+          errorStatus: extractHttpStatus(error),
           loadingTranscript: undefined,
           catchingUp: undefined,
         }));
@@ -444,69 +472,8 @@ export function createDaemonSessionActions({
     });
   }
 
-  function startSessionSwitch(
-    sessionId: string,
-    mode: 'load' | 'resume',
-    workspaceCwd?: string,
-    signal?: AbortSignal,
-    replaySource?: PendingSessionLoad['replaySource'],
-  ): Promise<void> {
-    if (signal?.aborted) {
-      return Promise.reject(
-        new DOMException('Session load cancelled', 'AbortError'),
-      );
-    }
-    const origin = getTransitionOrigin();
-    const startLegacy = () =>
-      startLegacySessionSwitch(
-        sessionId,
-        mode,
-        workspaceCwd,
-        signal,
-        replaySource,
-      );
-    const current = sessionRef.current;
-    const targetWorkspace = workspaceCwd ?? getConnection().workspaceCwd;
-    const crossLogicalTarget =
-      current !== undefined &&
-      (current.sessionId !== sessionId ||
-        normalizeWorkspaceIdentity(current.workspaceCwd) !==
-          normalizeWorkspaceIdentity(targetWorkspace));
-    if (
-      !crossLogicalTarget &&
-      replaySource === undefined &&
-      isCrossSessionTransitionPending()
-    ) {
-      return Promise.reject(
-        new DOMException(
-          'A session switch is still preparing',
-          'InvalidStateError',
-        ),
-      );
-    }
-    if (
-      !crossLogicalTarget ||
-      replaySource !== undefined ||
-      !beginCrossSessionTransition
-    ) {
-      return startLegacy();
-    }
-    return beginCrossSessionTransition(
-      {
-        sessionId,
-        mode,
-        ...(targetWorkspace !== undefined
-          ? { workspaceCwd: targetWorkspace }
-          : {}),
-        origin,
-      },
-      startLegacy,
-    );
-  }
-
   return {
     async sendPrompt(text, options) {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -535,6 +502,7 @@ export function createDaemonSessionActions({
           mimeType:
             img.mimeType || img.mediaType || img.media_type || 'image/*',
         }));
+        const normalizedFiles = normalizePromptFiles(options?.files);
         const inputAnnotations =
           options?.inputAnnotations && options.inputAnnotations.length > 0
             ? options.inputAnnotations
@@ -544,10 +512,15 @@ export function createDaemonSessionActions({
             text,
             normalizedImages,
             inputAnnotations ? { inputAnnotations } : undefined,
+            normalizedFiles,
           );
         }
         const promptRequest: Record<string, unknown> = {
-          prompt: toDaemonPromptContent(text, normalizedImages),
+          prompt: toDaemonPromptContent(
+            text,
+            normalizedImages,
+            normalizedFiles,
+          ),
         };
         if (inputAnnotations) {
           promptRequest['_meta'] = { inputAnnotations };
@@ -575,7 +548,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         if (isAbortError(error)) {
-          if (shouldSettlePromptForSession(session)) {
+          if (sessionRef.current?.sessionId === sessionId) {
             store.dispatch({ type: 'assistant.done', reason: 'cancelled' });
           }
           return { stopReason: 'cancelled' };
@@ -583,11 +556,11 @@ export function createDaemonSessionActions({
         if (isDaemonTurnError(error)) {
           throw error;
         }
-        if (shouldSettlePromptForSession(session)) {
+        if (sessionRef.current?.sessionId === sessionId) {
           store.dispatch({ type: 'assistant.done', reason: 'error' });
         }
         throw dispatchActionError(
-          noticeForLogicalSession(session),
+          addNotice,
           'Prompt failed',
           error,
           'send_prompt',
@@ -597,14 +570,16 @@ export function createDaemonSessionActions({
         if (active?.controller === ctrl) {
           activePromptsRef.current.delete(sessionId);
         }
-        if (isCurrentLogicalSession(session) && !hasSessionActivePrompt()) {
+        if (
+          sessionRef.current?.sessionId === sessionId &&
+          !hasSessionActivePrompt()
+        ) {
           setPromptStatus('idle');
         }
       }
     },
 
     async submitPrompt(text, options) {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -620,6 +595,7 @@ export function createDaemonSessionActions({
         data: img.data,
         mimeType: img.mimeType || img.mediaType || img.media_type || 'image/*',
       }));
+      const normalizedFiles = normalizePromptFiles(options?.files);
       const inputAnnotations =
         options?.inputAnnotations && options.inputAnnotations.length > 0
           ? options.inputAnnotations
@@ -629,10 +605,11 @@ export function createDaemonSessionActions({
           text,
           normalizedImages,
           inputAnnotations ? { inputAnnotations } : undefined,
+          normalizedFiles,
         );
       }
       const promptRequest: Record<string, unknown> = {
-        prompt: toDaemonPromptContent(text, normalizedImages),
+        prompt: toDaemonPromptContent(text, normalizedImages, normalizedFiles),
       };
       if (inputAnnotations) {
         promptRequest['_meta'] = { inputAnnotations };
@@ -654,7 +631,7 @@ export function createDaemonSessionActions({
             '[submitPrompt] removePendingPrompt failed after abort',
             err,
           );
-          noticeForSession(session)({
+          addNotice({
             severity: 'error',
             category: 'user_action',
             operation: 'send_prompt',
@@ -692,7 +669,7 @@ export function createDaemonSessionActions({
         await withActionTimeout(session.cancel(), 'Cancel timed out');
       } catch (error) {
         throw dispatchActionError(
-          noticeForLogicalSession(session),
+          addNotice,
           'Cancel failed',
           error,
           'cancel_prompt',
@@ -705,14 +682,16 @@ export function createDaemonSessionActions({
         ) {
           activePromptsRef.current.delete(session.sessionId);
         }
-        if (isCurrentLogicalSession(session) && !hasSessionActivePrompt()) {
+        if (
+          sessionRef.current?.sessionId === session.sessionId &&
+          !hasSessionActivePrompt()
+        ) {
           setPromptStatus('idle');
         }
       }
     },
 
     async setModel(modelId) {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -720,17 +699,60 @@ export function createDaemonSessionActions({
         'switch_model',
       );
       try {
+        const modelRequest = session.setModel(modelId);
+        const contextRequest = trackSessionConfigMutation(
+          session,
+          modelRequest.then(() => session.context()),
+        );
         const result = await withActionTimeout(
-          session.setModel(modelId),
+          modelRequest,
           'Set model timed out',
         );
-        if (sessionRef.current === session) {
-          setConnection((current) => ({ ...current, currentModel: modelId }));
+        const modelGeneration =
+          sessionRef.current === session
+            ? ++modelMutationGeneration
+            : undefined;
+        if (modelGeneration !== undefined) {
+          setConnection((current) => {
+            if (
+              sessionRef.current !== session ||
+              modelGeneration !== modelMutationGeneration
+            ) {
+              return current;
+            }
+            return { ...current, currentModel: modelId, reasoning: undefined };
+          });
+        }
+        const context = await withActionTimeout(
+          contextRequest,
+          'Refresh model context timed out',
+        ).catch(() => undefined);
+        if (
+          modelGeneration !== undefined &&
+          sessionRef.current === session &&
+          modelGeneration === modelMutationGeneration
+        ) {
+          setConnection((current) => {
+            if (
+              sessionRef.current !== session ||
+              modelGeneration !== modelMutationGeneration ||
+              current.currentModel !== modelId
+            ) {
+              return current;
+            }
+            return {
+              ...current,
+              context: context ?? current.context,
+              reasoning: context
+                ? mapSessionContextReasoning(context)
+                : undefined,
+            };
+          });
         }
         return result;
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Set model failed',
           error,
           'switch_model',
@@ -738,8 +760,67 @@ export function createDaemonSessionActions({
       }
     },
 
+    async setReasoningEffort(value) {
+      const actionToken = ++reasoningActionToken;
+      const sourceModel = getConnection().currentModel;
+      const sourceModelGeneration = modelMutationGeneration;
+      const session = requireSessionForAction(
+        addNotice,
+        sessionRef.current,
+        'Set reasoning effort failed',
+        'set_reasoning_effort',
+      );
+      try {
+        const result = await withActionTimeout(
+          trackSessionConfigMutation(
+            session,
+            session.setConfigOption('reasoning_effort', value),
+          ),
+          'Set reasoning effort timed out',
+        );
+        const current = getConnection();
+        if (
+          sessionRef.current === session &&
+          sourceModelGeneration === modelMutationGeneration &&
+          current.currentModel === sourceModel &&
+          actionToken > appliedReasoningActionToken
+        ) {
+          appliedReasoningActionToken = actionToken;
+          setConnection((current) => {
+            if (
+              sessionRef.current !== session ||
+              sourceModelGeneration !== modelMutationGeneration ||
+              current.currentModel !== sourceModel
+            ) {
+              return current;
+            }
+            const configOptions = result.configOptions;
+            return {
+              ...current,
+              reasoning: mapReasoningControls(
+                configOptions,
+                current.reasoning?.effort,
+              ),
+              context: current.context
+                ? {
+                    ...current.context,
+                    state: { ...current.context.state, configOptions },
+                  }
+                : current.context,
+            };
+          });
+        }
+      } catch (error) {
+        throw dispatchActionError(
+          noticeForSession(session),
+          'Set reasoning effort failed',
+          error,
+          'set_reasoning_effort',
+        );
+      }
+    },
+
     async setApprovalMode(mode, opts) {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -763,7 +844,7 @@ export function createDaemonSessionActions({
         return result;
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Set approval mode failed',
           error,
           'set_approval_mode',
@@ -785,7 +866,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Permission response failed',
           error,
           'submit_permission',
@@ -817,7 +898,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Permission response failed',
           error,
           'submit_permission',
@@ -841,7 +922,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'List sessions failed',
           error,
           'list_sessions',
@@ -854,7 +935,6 @@ export function createDaemonSessionActions({
     },
 
     async reloadSession(signal, options) {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -881,7 +961,32 @@ export function createDaemonSessionActions({
       worktree?: { slug?: string };
       branch?: { name: string };
     }) {
-      requireStableSession();
+      let rawCreateStarted = false;
+      let rawCreateSettled = false;
+      let retireLateResult = false;
+      const trackCreate = <T>(
+        request: Promise<T>,
+        retire: (created: T) => Promise<unknown>,
+      ) => {
+        rawCreateStarted = true;
+        void request.then(
+          (created) => {
+            rawCreateSettled = true;
+            if (retireLateResult) {
+              void retire(created).catch((error: unknown) => {
+                console.warn(
+                  '[DaemonSessionActions] detach after timed-out create failed:',
+                  error,
+                );
+              });
+            }
+          },
+          () => {
+            rawCreateSettled = true;
+          },
+        );
+        return request;
+      };
       try {
         manualSessionClearRef.current = false;
         // Fold the initial approval mode into the create request so the daemon
@@ -909,13 +1014,20 @@ export function createDaemonSessionActions({
             : undefined;
         if (activeSession) {
           const nextSession = await withActionTimeout(
-            activeSession.client.createOrAttachSession({
-              ...getCreateSessionRequest(),
-              ...(options?.workspaceCwd !== undefined
-                ? { workspaceCwd: options.workspaceCwd }
-                : {}),
-              ...requestOverrides,
-            }),
+            trackCreate(
+              activeSession.client.createOrAttachSession({
+                ...getCreateSessionRequest(),
+                ...(options?.workspaceCwd !== undefined
+                  ? { workspaceCwd: options.workspaceCwd }
+                  : {}),
+                ...requestOverrides,
+              }),
+              (created) =>
+                activeSession.client.detachSession(
+                  created.sessionId,
+                  created.clientId,
+                ),
+            ),
             'Create session timed out',
           );
           persistStableClientId(nextSession.clientId, nextSession.sessionId);
@@ -923,7 +1035,10 @@ export function createDaemonSessionActions({
         }
 
         const nextSession = await withActionTimeout(
-          createDetachedSession(options?.workspaceCwd, requestOverrides),
+          trackCreate(
+            createDetachedSession(options?.workspaceCwd, requestOverrides),
+            (created) => created.detach(),
+          ),
           'Create session timed out',
         );
         if (manualSessionClearRef.current) {
@@ -955,6 +1070,7 @@ export function createDaemonSessionActions({
         }));
         return nextSession;
       } catch (error) {
+        if (rawCreateStarted && !rawCreateSettled) retireLateResult = true;
         throw dispatchActionError(
           addNotice,
           `Create session failed${
@@ -967,7 +1083,6 @@ export function createDaemonSessionActions({
     },
 
     async attachSession() {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -980,7 +1095,6 @@ export function createDaemonSessionActions({
     },
 
     async clearSession() {
-      cancelCrossSessionTransition('Session transition cancelled by clear');
       const session = sessionRef.current;
       manualSessionClearRef.current = true;
       clearActiveSessionState();
@@ -998,9 +1112,6 @@ export function createDaemonSessionActions({
     },
 
     async newSession() {
-      cancelCrossSessionTransition(
-        'Session transition cancelled by new session',
-      );
       manualSessionClearRef.current = false;
       clearActiveSessionState();
       setConnection((current) => ({
@@ -1014,11 +1125,6 @@ export function createDaemonSessionActions({
 
     async releaseSession(sessionId) {
       try {
-        if (sessionRef.current?.sessionId === sessionId) {
-          cancelCrossSessionTransition(
-            'Session transition cancelled by release',
-          );
-        }
         const session = requireSessionForAction(
           addNotice,
           sessionRef.current,
@@ -1040,7 +1146,6 @@ export function createDaemonSessionActions({
     },
 
     async closeSession() {
-      cancelCrossSessionTransition('Session transition cancelled by close');
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1051,7 +1156,7 @@ export function createDaemonSessionActions({
         await withActionTimeout(session.close(), 'Close session timed out');
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Close session failed',
           error,
           'close_session',
@@ -1081,9 +1186,8 @@ export function createDaemonSessionActions({
           }));
         }
       } catch (error) {
-        if (sessionRef.current !== session) return;
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Refresh commands failed',
           error,
           'refresh_commands',
@@ -1098,25 +1202,37 @@ export function createDaemonSessionActions({
         'Load context failed',
         'load_context',
       );
+      const configGeneration = sessionConfigGeneration.get(session) ?? 0;
       try {
         const context = await withActionTimeout(
           session.context(),
           'Load context timed out',
         );
-        if (sessionRef.current === session) {
-          setConnection((current) => ({
+        setConnection((current) => {
+          if (
+            sessionRef.current !== session ||
+            configGeneration % 2 !== 0 ||
+            (sessionConfigGeneration.get(session) ?? 0) !== configGeneration
+          ) {
+            return current;
+          }
+          return {
             ...current,
             context,
             currentMode:
               getModeFromSessionContext(context) ?? current.currentMode,
             currentModel:
               getModelFromSessionContext(context) ?? current.currentModel,
-          }));
-        }
+            reasoning: mapSessionContextReasoning(
+              context,
+              current.reasoning?.effort,
+            ),
+          };
+        });
         return context;
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Load context failed',
           error,
           'load_context',
@@ -1138,7 +1254,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Load context usage failed',
           error,
           'load_context_usage',
@@ -1147,7 +1263,6 @@ export function createDaemonSessionActions({
     },
 
     async renameSession(displayName) {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1161,7 +1276,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Rename session failed',
           error,
           'rename_session',
@@ -1170,7 +1285,6 @@ export function createDaemonSessionActions({
     },
 
     async recapSession(): Promise<DaemonSessionRecapResult> {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1184,7 +1298,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Recap session failed',
           error,
           'recap_session',
@@ -1196,7 +1310,6 @@ export function createDaemonSessionActions({
       prompt: string,
       opts?: { signal?: AbortSignal },
     ): AsyncGenerator<DaemonSessionGenerationEvent> {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1222,7 +1335,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Load rewind snapshots failed',
           error,
           'rewind_snapshots',
@@ -1234,7 +1347,6 @@ export function createDaemonSessionActions({
       promptId: string,
       opts?: { rewindFiles?: boolean },
     ): Promise<DaemonRewindResult> {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1248,7 +1360,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Rewind session failed',
           error,
           'rewind_session',
@@ -1260,7 +1372,6 @@ export function createDaemonSessionActions({
       question: string,
       opts?: { signal?: AbortSignal },
     ): Promise<DaemonSessionBtwResult> {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1277,7 +1388,7 @@ export function createDaemonSessionActions({
           throw error;
         }
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Side question failed',
           error,
           'btw_session',
@@ -1289,7 +1400,6 @@ export function createDaemonSessionActions({
       message: string,
       opts?: { signal?: AbortSignal; messageId?: string },
     ): Promise<DaemonMidTurnMessageResult> {
-      if (isCrossSessionTransitionPending()) return { accepted: false };
       // Calls without an id are the old-daemon compatibility path and fall back
       // locally. With a stable id, transport failure is ambiguous (the POST may
       // already have committed), so let the caller reconcile instead of
@@ -1382,7 +1492,6 @@ export function createDaemonSessionActions({
     },
 
     async sendShellCommand(command: string) {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1397,7 +1506,7 @@ export function createDaemonSessionActions({
         return await session.shellCommand(command, ctrl.signal);
       } catch (error) {
         throw dispatchActionError(
-          noticeForLogicalSession(session),
+          addNotice,
           'Shell command failed',
           error,
           'send_shell_command',
@@ -1406,7 +1515,10 @@ export function createDaemonSessionActions({
         if (activePromptsRef.current.get(shellKey)?.controller === ctrl) {
           activePromptsRef.current.delete(shellKey);
         }
-        if (isCurrentLogicalSession(session) && !hasSessionActivePrompt()) {
+        if (
+          sessionRef.current?.sessionId === session.sessionId &&
+          !hasSessionActivePrompt()
+        ) {
           setPromptStatus('idle');
         }
       }
@@ -1428,7 +1540,7 @@ export function createDaemonSessionActions({
           throw error;
         }
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Get tasks failed',
           error,
           'load_tasks',
@@ -1456,7 +1568,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Cancel task failed',
           error,
           'cancel_task',
@@ -1465,7 +1577,6 @@ export function createDaemonSessionActions({
     },
 
     async clearGoal() {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1479,7 +1590,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Clear goal failed',
           error,
           'clear_goal',
@@ -1498,7 +1609,7 @@ export function createDaemonSessionActions({
         return await withActionTimeout(session.stats(), 'Load stats timed out');
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Load stats failed',
           error,
           'load_stats',
@@ -1529,7 +1640,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Global permission response failed',
           error,
           'submit_permission',
@@ -1537,69 +1648,89 @@ export function createDaemonSessionActions({
       }
     },
 
-    async branchSession(name?: string) {
-      requireStableSession();
+    async branchSession(name?: string, atRecordId?: string) {
+      if (branchInFlight) {
+        throw new DOMException(
+          'A branch request is already in progress',
+          'InvalidStateError',
+        );
+      }
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
         'Branch session failed',
         'branch_session',
       );
+      const sourceSessionId = session.sessionId;
+      const loadGeneration = pendingSessionLoadIdRef.current;
+      branchInFlight = true;
       try {
-        setSourceBoundOperationInFlight(true);
-        const branchRequest = session.client.branchSession(
-          session.sessionId,
-          { name },
-          session.clientId,
-        );
-        void branchRequest.then(
-          () => setSourceBoundOperationInFlight(false),
-          () => setSourceBoundOperationInFlight(false),
-        );
-        const result = await withActionTimeout(
-          branchRequest,
-          'Branch session timed out',
-        );
-        if (!isCurrentLogicalSession(session)) {
+        const branchRequest: Promise<DaemonBranchSessionResult> =
+          atRecordId === undefined
+            ? session.client.branchSession(
+                sourceSessionId,
+                { name },
+                session.clientId,
+              )
+            : session.client.branchSession(
+                sourceSessionId,
+                { name, atRecordId },
+                session.clientId,
+              );
+        const result = await branchRequest;
+        const switchStarted =
+          sessionRef.current === session &&
+          pendingSessionLoadIdRef.current === loadGeneration;
+        const restored =
+          atRecordId === undefined
+            ? (result as DaemonBranchedSession)
+            : undefined;
+        if (switchStarted) {
+          if (restored?.clientId) {
+            persistStableClientId(restored.clientId, restored.sessionId);
+          }
+          void startSessionSwitch(result.sessionId, 'load').catch(
+            (switchError: unknown) => {
+              if (restored?.clientId) {
+                void session.client
+                  .detachSession(restored.sessionId, restored.clientId)
+                  .catch(() => undefined);
+              }
+              if (isAbortError(switchError)) return;
+              dispatchActionError(
+                addNotice,
+                'Branch session failed',
+                switchError,
+                'branch_session',
+              );
+            },
+          );
+        } else if (restored?.clientId) {
           void session.client
-            .detachSession(result.sessionId, result.clientId)
+            .detachSession(restored.sessionId, restored.clientId)
             .catch(() => undefined);
-          return {
-            sessionId: result.sessionId,
-            displayName: result.displayName,
-          };
         }
-        persistStableClientId(result.clientId, result.sessionId);
-        void startSessionSwitch(result.sessionId, 'load').catch(
-          (switchError: unknown) => {
-            void session.client
-              .detachSession(result.sessionId, result.clientId)
-              .catch(() => undefined);
-            if (isAbortError(switchError)) return;
-            dispatchActionError(
-              addNotice,
-              'Branch session failed',
-              switchError,
-              'branch_session',
-            );
-          },
-        );
         return {
           sessionId: result.sessionId,
           displayName: result.displayName,
+          switchStarted,
         };
       } catch (error) {
+        if (isStaleBranchPointError(error)) {
+          throw markNoticeDispatched(error);
+        }
         throw dispatchActionError(
           addNotice,
           'Branch session failed',
           error,
           'branch_session',
         );
+      } finally {
+        branchInFlight = false;
       }
     },
 
     async forkSession(directive: string): Promise<DaemonForkSessionResult> {
-      requireStableSession();
       const session = requireSessionForAction(
         addNotice,
         sessionRef.current,
@@ -1613,7 +1744,7 @@ export function createDaemonSessionActions({
         );
       } catch (error) {
         throw dispatchActionError(
-          noticeForSession(session),
+          addNotice,
           'Fork session failed',
           error,
           'fork_session',
