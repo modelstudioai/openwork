@@ -6,6 +6,7 @@
 
 import type {
   ApprovalMode,
+  GoalSnapshotV2,
   SessionGroupPresetColor,
 } from '@qwen-code/qwen-code-core';
 import type {
@@ -17,10 +18,13 @@ import type {
   ResumeSessionResponse,
   SetSessionModelRequest,
   SetSessionModelResponse,
+  SetSessionConfigOptionRequest,
+  SetSessionConfigOptionResponse,
   SessionUpdate,
 } from '@agentclientprotocol/sdk';
 import type {
   BridgeEvent,
+  LiveReplayMode,
   SessionReplaySnapshot,
   SubscribeOptions,
 } from './eventBus.js';
@@ -157,10 +161,12 @@ export interface BridgeRestoreSessionRequest {
   workspaceCwd: string;
   /** Optional echo of a daemon-issued client id for this session. */
   clientId?: string;
-  /** Internal replay transport for `session/load`; defaults to bulk response. */
+  /** Internal replay transport for `session/load`; defaults to stream. */
   historyReplay?: 'stream' | 'response';
   /** Optional newest persisted-record page requested for response replay. */
   historyPageSize?: number;
+  /** Load-only live-turn replay projection; defaults to the complete journal. */
+  liveReplayMode?: LiveReplayMode;
   /** Keep inherited fork records as model context without replaying them. */
   hideInheritedHistory?: boolean;
   approvalMode?: ApprovalMode;
@@ -185,6 +191,8 @@ export const LOAD_REPLAY_HIDE_INHERITED_META_KEY =
   'qwen.session.loadReplayHideInherited';
 export const LOAD_REPLAY_BULK_MODE = 'bulk';
 export const LOAD_REPLAY_VERSION = 1 as const;
+export const LOAD_REPLAY_MAX_BYTES = 32 * 1024 * 1024;
+export const LOAD_REPLAY_MAX_UPDATES = 10_000;
 
 export const REQUESTED_SESSION_ID_META_KEY = 'qwen-code/sessionId';
 
@@ -208,6 +216,18 @@ export const ACTIVE_WORK_CLOSE_IF_UNHELD_PARAM = 'onlyIfUnheld';
  *  longer buys nothing — an unanswered request is simply left for the next
  *  snapshot to settle. */
 export const ACTIVE_WORK_CLOSE_TIMEOUT_MS = 10_000;
+
+/**
+ * The child's drain budget for a `sessionClose` round trip: strictly under
+ * the daemon's outer wait so the child deadline always fires first, clamped
+ * to ≥1ms so a tiny outer wait still yields a usable budget. An outer wait
+ * that fires first leaves the close outcome unknown, which the close path
+ * recovers by killing the whole channel — the coupling lives here exactly
+ * once so the ratio cannot drift between call sites.
+ */
+export function sessionCloseDrainBudgetMs(outerWaitMs: number): number {
+  return Math.max(1, Math.floor(outerWaitMs * 0.8));
+}
 /** Bounds on a single snapshot. Generous next to any real deployment — they
  *  exist so a version-skewed or buggy child cannot make the daemon walk an
  *  unbounded structure per report, not to constrain legitimate use. A packet
@@ -217,16 +237,21 @@ export const ACTIVE_WORK_MAX_SESSION_HOLDS = 1024;
 export const WORKTREE_MCP_DEFER_META_KEY = 'qwen.session.deferMcpDiscovery';
 
 /**
- * Work categories a child reports holds for. Deliberately excludes background
- * shells, Monitors, workflows, and cron: those are out of `activeWork`'s
- * declared scope. The category travels on every hold so widening the scope
- * later adds data rather than changing what the `activeWork` boolean means.
+ * Work categories a child reports holds for. Monitors, workflows, and cron
+ * remain outside `activeWork`'s declared scope. The category travels on every
+ * hold so peers can negotiate coverage explicitly when the scope widens.
  */
-export type ActiveWorkHoldCategory = 'agent' | 'notification';
+export type ActiveWorkHoldCategory = 'agent' | 'notification' | 'shell';
+
+/** Categories understood by active-work v1 before category negotiation was
+ * added to the daemon's initialize request. */
+export const ACTIVE_WORK_LEGACY_HOLD_CATEGORIES: readonly ActiveWorkHoldCategory[] =
+  ['agent', 'notification'];
 
 export const ACTIVE_WORK_HOLD_CATEGORIES: readonly ActiveWorkHoldCategory[] = [
   'agent',
   'notification',
+  'shell',
 ];
 
 export interface ActiveWorkHeartbeatCapabilityV1 {
@@ -335,6 +360,7 @@ export interface ChannelStartupProfileV1 {
 export interface BridgeLoadReplayEnvelope {
   v: typeof LOAD_REPLAY_VERSION;
   updates: SessionUpdate[];
+  anchorRecordId?: string;
   hasMore?: boolean;
   partial?: true;
   replayError?: string;
@@ -416,12 +442,22 @@ export interface BridgeBranchSessionRequest {
   sourceType?: string;
   sourceId?: string;
   replayInheritedHistory?: boolean;
+  atRecordId?: string;
 }
 
-export interface BridgeBranchedSession extends BridgeRestoredSession {
+export interface BridgePersistedBranchedSession {
+  sessionId: string;
   displayName: string;
   forkedFrom: { sessionId: string; displayName: string };
 }
+
+export interface BridgeBranchedSession
+  extends BridgeRestoredSession,
+    BridgePersistedBranchedSession {}
+
+export type BridgeBranchSessionResult =
+  | BridgeBranchedSession
+  | BridgePersistedBranchedSession;
 
 export interface BridgeSideTaskSessionRequest {
   name?: string;
@@ -601,16 +637,14 @@ export interface BridgeSessionSummary {
 }
 
 /**
- * A session's live `/goal` state, as reported by the `qwen --acp` child.
- *
- * Only the active goal crosses the bridge. The child also caches the most
- * recent goal that ended on its own, but nothing on this side reads it, so it
- * is not part of the wire shape — add it back alongside the first consumer.
+ * A session's live canonical Goal state, as reported by the `qwen --acp`
+ * child. `active` remains as a compatibility projection for existing hosts.
  */
 export interface BridgeSessionGoal {
+  snapshot: GoalSnapshotV2;
   active: {
     condition: string;
-    /** Judge turns completed so far; 0 before the first stop-hook evaluation. */
+    /** Canonical Goal turns completed so far. */
     iterations: number;
     setAt: number;
     /** The judge's verdict on the most recent turn, when it has run. */
@@ -684,6 +718,15 @@ export interface BridgeClientRequestContext {
    * unchanged. HTTP routes never populate this from request input.
    */
   modelPrompt?: string;
+  /** User-facing projection supplied by an authenticated channel worker. */
+  promptDisplayText?: string;
+  /**
+   * Trusted channel-turn classification injected by the daemon prompt route
+   * after validating the channel-worker prompt authorization. Never
+   * populated from caller-controlled ACP metadata: `sendPrompt` strips the
+   * wire key from untrusted callers and re-injects it only from this flag.
+   */
+  channelPrompt?: boolean;
   /** Trusted Channel delivery correlation injected by the daemon prompt
    * route. Never populated from caller-controlled ACP metadata. */
   channelDelivery?: {
@@ -723,6 +766,11 @@ export function isValidTrustedModelPrompt(value: unknown): value is string {
 }
 
 export const DAEMON_CHANNEL_DELIVERY_META_KEY = 'qwen.daemon.channelDelivery';
+export const DAEMON_PROMPT_DISPLAY_TEXT_META_KEY =
+  'qwen.daemon.promptDisplayText';
+// Wire twin of channel-base's CHANNEL_PROMPT_META_KEY; the packages have no
+// dependency path between them, so a cross-package test pins the value.
+export const CHANNEL_PROMPT_META_KEY = 'qwen.channel.prompt';
 
 /**
  * Returned from `recordHeartbeat`. `lastSeenAt` is the server-side
@@ -904,8 +952,23 @@ export interface BridgeDaemonStatusLimits {
   maxPendingPromptsPerSession: number | null;
   eventRingSize: number;
   compactedReplayMaxBytes: number;
+  /**
+   * Per-session BASELINE journal caps. A session's effective caps can be
+   * higher mid-turn under adaptive growth — see
+   * `BridgeDaemonSessionDiagnostic.maxJournalEvents` /
+   * `maxJournalBytes` and `journalGrowth` below.
+   */
   maxJournalEvents: number;
   maxJournalBytes: number;
+  /**
+   * Adaptive live-journal growth configuration, or `null` when growth is
+   * disabled (fixed caps above). The pool is daemon-wide: every bridge of
+   * the daemon accounts its sessions against the same aggregate.
+   */
+  journalGrowth: {
+    poolBytes: number;
+    hardCapBytes: number;
+  } | null;
   channelIdleTimeoutMs: number;
   sessionIdleTimeoutMs: number;
 }
@@ -925,6 +988,14 @@ export interface BridgeDaemonSessionDiagnostic {
   lastSeenAt?: number;
   currentModelId?: string;
   currentApprovalMode?: string;
+  /**
+   * The session's EFFECTIVE live-journal caps right now — the configured
+   * baseline, or higher when adaptive growth raised them mid-turn. One
+   * session retains two journals (full + summary) under the SAME caps, so
+   * its live-journal heap can reach twice the reported byte cap.
+   */
+  maxJournalEvents: number;
+  maxJournalBytes: number;
 }
 
 export interface BridgeDaemonStatusSnapshot {
@@ -1099,15 +1170,12 @@ export interface AcpSessionBridge {
     req: BridgeRestoreSessionRequest,
   ): Promise<BridgeRestoredSession>;
 
-  /**
-   * Fork a live session's JSONL transcript and load the fork via resume
-   * semantics (no history replay). Source must be idle (no active prompt).
-   */
+  /** Restore latest-state forks; leave historical checkpoint forks persisted. */
   branchSession(
     sessionId: string,
     req: BridgeBranchSessionRequest,
     context?: BridgeClientRequestContext,
-  ): Promise<BridgeBranchedSession>;
+  ): Promise<BridgeBranchSessionResult>;
 
   /** Create a persisted side task with a snapshot of the parent's context. */
   createSideTaskSession(
@@ -1471,9 +1539,8 @@ export interface AcpSessionBridge {
   ): Promise<{ cleared: boolean; condition?: string }>;
 
   /**
-   * Read a live session's goal state. Throws `SessionNotFoundError` when the
-   * session is not resident — goals live in the child's memory, so a
-   * non-resident session has no goal to report.
+   * Read a live session's Goal state. Throws `SessionNotFoundError` when the
+   * session is not resident because this route addresses the selected runtime.
    */
   getSessionGoal(sessionId: string): Promise<BridgeSessionGoal>;
 
@@ -1544,6 +1611,12 @@ export interface AcpSessionBridge {
     req: SetSessionModelRequest,
     context?: BridgeClientRequestContext,
   ): Promise<SetSessionModelResponse>;
+
+  /** Change one advertised ACP configuration option for a live session. */
+  setSessionConfigOption(
+    sessionId: string,
+    req: SetSessionConfigOptionRequest,
+  ): Promise<SetSessionConfigOptionResponse>;
 
   /**
    * Switch UI language and optionally LLM output language for a live
@@ -1852,9 +1925,9 @@ export interface AcpSessionBridge {
   readonly activePromptCount: number;
 
   /**
-   * Whether an accepted prompt, a running background Agent, or an Agent
-   * terminal notification is unsettled. Background shells, Monitors,
-   * workflows, and cron are deliberately outside this.
+   * Whether an accepted prompt, a running background Agent, an Agent terminal
+   * notification, or Session-managed background shell work is unsettled.
+   * Monitors, workflows, and cron are deliberately outside this.
    */
   readonly activeWork: boolean;
 
