@@ -105,10 +105,15 @@ runs:
         echo "_For detailed HTML reports, please see the 'coverage-reports-${NODE_VERSION}-${OS}' artifact from the main CI run._" >> "${COMMENT_FILE}"
 
     - name: 'Post Coverage Comment'
-      uses: 'thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b' # ratchet:thollander/actions-comment-pull-request@v3
       if: |-
         ${{ always() }}
-      with:
-        file-path: 'coverage-comment.md' # Use the generated file directly
-        comment-tag: 'code-coverage-summary'
-        github-token: '${{ inputs.github_token }}'
+      shell: 'bash'
+      env:
+        GH_TOKEN: '${{ inputs.github_token }}'
+        PR_NUMBER: '${{ github.event.pull_request.number }}'
+        REPOSITORY: '${{ github.repository }}'
+      run: |-
+        marker='<!-- thollander/actions-comment-pull-request "code-coverage-summary" -->'
+        printf '\n%s\n' "${marker}" >> coverage-comment.md
+        .github/scripts/upsert-bot-comment.sh \
+          "${REPOSITORY}" "${PR_NUMBER}" "${marker}" coverage-comment.md
