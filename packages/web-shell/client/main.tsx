@@ -23,7 +23,6 @@ import {
   notifyOpenWorkTurnComplete,
   OpenWorkDesktopLayer,
   OpenWorkWelcomeFooter,
-  openInOpenWorkBrowser,
   recordOpenWorkSession,
 } from './openwork/OpenWorkDesktopLayer';
 import 'katex/dist/katex.min.css';
@@ -227,9 +226,6 @@ export function StandaloneApp({ daemonToken }: { daemonToken?: string }) {
             },
             compactThinking: true,
             markdownTableMode: 'advanced',
-            markdown: {
-              onOpenLink: openInOpenWorkBrowser,
-            },
             renderWelcomeFooter: () => (
               <OpenWorkWelcomeFooter composerRef={composerRef} />
             ),
