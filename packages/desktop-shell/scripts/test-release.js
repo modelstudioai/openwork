@@ -22,6 +22,14 @@ const electronBridgeScript = path.join(
   'scripts',
   'create-electron-bridge-manifest.mjs',
 );
+const desktopUpdateScript = path.join(
+  packageDir,
+  '..',
+  '..',
+  '.github',
+  'scripts',
+  'create-desktop-update-manifest.mjs',
+);
 const root = fs.mkdtempSync(
   path.join(os.tmpdir(), 'openwork-desktop-release-test-'),
 );
@@ -32,6 +40,7 @@ try {
   testMacosPermissions();
   testReleaseWorkflow();
   testRuntimePreparationContract();
+  testDesktopUpdateManifest(path.join(root, 'desktop-update'));
   testElectronBridgeManifest(path.join(root, 'electron-bridge'));
   testChecksumRefresh(path.join(root, 'checksums'));
   testVersionSynchronization(path.join(root, 'version'));
@@ -258,8 +267,52 @@ function testReleaseWorkflow() {
     /if: '?inputs\.dry_run == false'?[\s\S]*contents: '?write'?/,
   );
   assert.match(publishJob, /secrets: '?inherit'?/);
+  const matrices = buildWorkflow.match(
+    /fromJSON\(inputs\.publish &&\s*'([^']+)' \|\|\s*'([^']+)'\)/,
+  );
+  assert.ok(matrices);
+  assert.equal(
+    JSON.parse(matrices[1]).some(({ os }) => os.startsWith('windows-')),
+    false,
+  );
+  assert.equal(
+    JSON.parse(matrices[2]).some(({ os }) => os.startsWith('windows-')),
+    true,
+  );
   assert.doesNotMatch(workflow, /uses: [^\n]+@(v\d|stable)\b/);
   assert.doesNotMatch(workflow, /push --force|force-with-lease/);
+}
+
+function testDesktopUpdateManifest(directory) {
+  const assets = path.join(directory, 'assets');
+  const output = path.join(directory, 'latest.json');
+  fs.mkdirSync(assets, { recursive: true });
+  for (const artifact of [
+    'OpenWork-aarch64-apple-darwin.app.tar.gz',
+    'OpenWork-x86_64-apple-darwin.app.tar.gz',
+    'OpenWork_0.2.1_amd64.AppImage',
+  ]) {
+    fs.writeFileSync(path.join(assets, artifact), artifact);
+    fs.writeFileSync(path.join(assets, `${artifact}.sig`), `signature:${artifact}`);
+  }
+  execFileSync(process.execPath, [
+    desktopUpdateScript,
+    '--assets',
+    assets,
+    '--repository',
+    'modelstudioai/openwork',
+    '--tag',
+    'openwork-v0.2.1',
+    '--version',
+    '0.2.1',
+    '--output',
+    output,
+  ]);
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(output)).platforms), [
+    'darwin-aarch64',
+    'darwin-x86_64',
+    'linux-x86_64',
+  ]);
 }
 
 function testElectronBridgeManifest(directory) {

@@ -35,21 +35,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: 'macOS Apple Silicon'
-            os: 'macos-15'
-            target: 'aarch64-apple-darwin'
-            legacy_arch: 'arm64'
-          - name: 'macOS Intel'
-            os: 'macos-15-intel'
-            target: 'x86_64-apple-darwin'
-            legacy_arch: 'x64'
-          - name: 'Windows x64'
-            os: 'windows-2025'
-            target: 'x86_64-pc-windows-msvc'
-          - name: 'Linux x64'
-            os: 'ubuntu-22.04'
-            target: 'x86_64-unknown-linux-gnu'
+        include: >-
+          ${{ fromJSON(inputs.publish &&
+          '[{"name":"macOS Apple Silicon","os":"macos-15","target":"aarch64-apple-darwin","legacy_arch":"arm64"},{"name":"macOS Intel","os":"macos-15-intel","target":"x86_64-apple-darwin","legacy_arch":"x64"},{"name":"Linux x64","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}]' ||
+          '[{"name":"macOS Apple Silicon","os":"macos-15","target":"aarch64-apple-darwin","legacy_arch":"arm64"},{"name":"macOS Intel","os":"macos-15-intel","target":"x86_64-apple-darwin","legacy_arch":"x64"},{"name":"Windows x64","os":"windows-2025","target":"x86_64-pc-windows-msvc"},{"name":"Linux x64","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu"}]') }}
     steps:
       - name: 'Check out source'
         uses: 'actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10' # v6.0.3
@@ -352,6 +341,9 @@ jobs:
             for manifest in macos:latest-mac.yml windows:latest.yml linux:latest-linux.yml; do
               platform="${manifest%%:*}"
               output="${manifest#*:}"
+              if [[ "$platform" == 'windows' ]] && ! compgen -G 'release-assets/*-setup.exe' >/dev/null; then
+                continue
+              fi
               node .github/scripts/create-electron-bridge-manifest.mjs --assets release-assets --platform "$platform" --version "$RELEASE_VERSION" --output "release-assets/$output"
             done
           fi

@@ -23,11 +23,15 @@ const platformArtifacts = [
       'darwin-x86_64',
     ),
   ],
-  ['windows-x86_64', selectArtifact(assets, /-setup\.exe$/i, 'windows-x86_64')],
+  [
+    'windows-x86_64',
+    selectArtifact(assets, /-setup\.exe$/i, 'windows-x86_64', true),
+  ],
   ['linux-x86_64', selectArtifact(assets, /\.AppImage$/i, 'linux-x86_64')],
 ];
 
 for (const [platform, artifact] of platformArtifacts) {
+  if (!artifact) continue;
   const signatureFile = `${artifact}.sig`;
   if (!assets.includes(signatureFile)) {
     throw new Error(`Missing updater signature for ${artifact}`);
@@ -47,8 +51,9 @@ const manifest = {
 };
 fs.writeFileSync(options.output, `${JSON.stringify(manifest, null, 2)}\n`);
 
-function selectArtifact(assets, pattern, platform) {
+function selectArtifact(assets, pattern, platform, optional = false) {
   const matches = assets.filter((asset) => pattern.test(asset));
+  if (optional && matches.length === 0) return undefined;
   if (matches.length !== 1) {
     throw new Error(
       `Expected one updater artifact for ${platform}, found ${matches.length}: ${matches.join(', ')}`,
